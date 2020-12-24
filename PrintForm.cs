@@ -1,0 +1,1778 @@
+﻿using Aspose.Words;
+using FISCA.Data;
+using FISCA.Presentation.Controls;
+using HsinChuSemesterScoreFixed_JH.DAO;
+using JHSchool.Data;
+using K12.Data;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.IO;
+using System.Linq;
+using System.Windows.Forms;
+using System.Xml;
+using System.Xml.Linq;
+using JHSchool.Behavior.BusinessLogic;
+using Campus.ePaperCloud;
+using JHScoreReportDAL;
+
+namespace HsinChuSemesterScoreFixed_JH
+{
+    public partial class PrintForm : BaseForm
+    {
+        FISCA.UDT.AccessHelper _AccessHelper = new FISCA.UDT.AccessHelper();
+
+        List<string> _StudentIDList;
+        //   Dictionary<string, DataRow> _StudentRowDict = new Dictionary<string, DataRow>();
+        DataTable dt = new DataTable();
+        private List<string> typeList = new List<string>();
+        List<string> _文字描述 = new List<string>();
+
+        BackgroundWorker _bgWorkReport;
+        DocumentBuilder _builder;
+        BackgroundWorker _bgWorkerLoadData;
+
+        JHScoreReportDAL.Config confDomainSubject = new Config();
+
+
+        List<StudentRecord> _Students = new List<StudentRecord>();
+
+        // 錯誤訊息
+        List<string> _ErrorList = new List<string>();
+
+        // 領域錯誤訊息
+        List<string> _ErrorDomainNameList = new List<string>();
+
+        // 樣板內有科目名稱
+        List<string> _TemplateSubjectNameList = new List<string>();
+
+        // 存檔路徑
+        string pathW = "";
+
+        // 樣板設定檔
+        private List<Configure> _ConfigureList = new List<Configure>();
+
+        /// <summary>
+        /// 日常生活表現名稱對照使用
+        /// </summary>
+        private static Dictionary<string, string> _DLBehaviorConfigNameDict = new Dictionary<string, string>();
+
+        //假別設定
+        Dictionary<string, List<string>> allowAbsentDic = new Dictionary<string, List<string>>();
+
+
+        /// <summary>
+        /// 日常生活表現子項目名稱,呼叫GetDLBehaviorConfigNameDict 一同取得
+        /// </summary>
+        private static Dictionary<string, List<string>> _DLBehaviorConfigItemNameDict = new Dictionary<string, List<string>>();
+
+        // 地址
+        Dictionary<string, JHAddressRecord> AddressRecordDict = new Dictionary<string, JHAddressRecord>();
+
+        // 父母監護人
+        Dictionary<string, JHParentRecord> ParentRecordDict = new Dictionary<string, JHParentRecord>();
+
+        private string _DefalutSchoolYear = "";
+        private string _DefaultSemester = "";
+
+        private int _SelSchoolYear;
+        private int _SelSemester;
+
+        ScoreMappingConfig _ScoreMappingConfig = new ScoreMappingConfig();
+
+        // 紀錄樣板設定
+        List<DAO.UDT_ScoreConfig> _UDTConfigList;
+
+        public PrintForm(List<string> StudIDList)
+        {
+            InitializeComponent();
+            _bgWorkerLoadData = new BackgroundWorker();
+            _bgWorkReport = new BackgroundWorker();
+            _bgWorkerLoadData.DoWork += _bgWorkerLoadData_DoWork;
+            _bgWorkerLoadData.RunWorkerCompleted += _bgWorkerLoadData_RunWorkerCompleted;
+            _bgWorkerLoadData.WorkerReportsProgress = true;
+            _bgWorkerLoadData.ProgressChanged += _bgWorkerLoadData_ProgressChanged;
+            _bgWorkReport.DoWork += _bgWorkReport_DoWork;
+            _bgWorkReport.RunWorkerCompleted += _bgWorkReport_RunWorkerCompleted;
+            _bgWorkReport.WorkerReportsProgress = true;
+            _bgWorkReport.ProgressChanged += _bgWorkReport_ProgressChanged;
+
+            _StudentIDList = StudIDList;
+            _Students = Student.SelectByIDs(StudIDList);
+        }
+
+        private void _bgWorkReport_ProgressChanged(object sender, ProgressChangedEventArgs e)
+        {
+            FISCA.Presentation.MotherForm.SetStatusBarMessage("學期成績報表產生中...", e.ProgressPercentage);
+        }
+
+        private void _bgWorkReport_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            if (e.Error != null)
+            {
+                MessageBox.Show(e.Error.Message);
+                return;
+            }
+            Document doc = e.Result as Document;
+
+            string reportName = _SelSchoolYear + "學年度第" + _SelSemester + "學期學期成績通知單";
+            MemoryStream memoryStream = new MemoryStream();
+            doc.Save(memoryStream, SaveFormat.Doc);
+            ePaperCloud ePaperCloud = new ePaperCloud();
+            ePaperCloud.upload_ePaper(_SelSchoolYear, _SelSemester, reportName, "", memoryStream, ePaperCloud.ViewerType.Student, ePaperCloud.FormatType.Docx);
+
+            FISCA.Presentation.MotherForm.SetStatusBarMessage("");
+        }
+
+        private void _bgWorkReport_DoWork(object sender, DoWorkEventArgs e)
+        {
+            try
+            {
+                _bgWorkReport.ReportProgress(1);
+
+
+                // 取得科目領域名稱
+                confDomainSubject.GetConfigData();
+
+                dt.Clear();
+                _DLBehaviorConfigNameDict = GetDLBehaviorConfigNameDict();
+                List<string> plist = K12.Data.PeriodMapping.SelectAll().Select(x => x.Type).Distinct().ToList();
+                List<string> alist = K12.Data.AbsenceMapping.SelectAll().Select(x => x.Name).ToList();
+
+
+                // 建立合併欄位
+                dt.Columns.Add("列印日期");
+                dt.Columns.Add("學校名稱");
+                dt.Columns.Add("學年度");
+                dt.Columns.Add("學期");
+                dt.Columns.Add("系統編號");
+                dt.Columns.Add("姓名");
+                dt.Columns.Add("英文姓名");
+                dt.Columns.Add("班級");
+                dt.Columns.Add("座號");
+                dt.Columns.Add("學號");
+                dt.Columns.Add("大功");
+                dt.Columns.Add("小功");
+                dt.Columns.Add("嘉獎");
+                dt.Columns.Add("大過");
+                dt.Columns.Add("小過");
+                dt.Columns.Add("警告");
+                dt.Columns.Add("上課天數");
+                dt.Columns.Add("學習領域成績");
+                dt.Columns.Add("學習領域原始成績");
+                dt.Columns.Add("課程學習成績");
+                dt.Columns.Add("課程學習原始成績");
+                dt.Columns.Add("班導師");
+                dt.Columns.Add("教務主任");
+                dt.Columns.Add("校長");
+                dt.Columns.Add("服務學習時數");
+                dt.Columns.Add("文字描述");
+
+
+                dt.Columns.Add("學校地址");
+                dt.Columns.Add("學校電話");
+                dt.Columns.Add("收件人地址");
+                dt.Columns.Add("通訊地址");
+                dt.Columns.Add("通訊地址郵遞區號");
+                dt.Columns.Add("通訊地址內容");
+                dt.Columns.Add("戶籍地址");
+                dt.Columns.Add("戶籍地址郵遞區號");
+                dt.Columns.Add("戶籍地址內容");
+                dt.Columns.Add("監護人");
+                dt.Columns.Add("父親");
+                dt.Columns.Add("母親");
+                dt.Columns.Add("收件人");
+                dt.Columns.Add("學期類別排名1");
+                dt.Columns.Add("學期類別排名2");
+
+                //科目欄位
+                for (int i = 1; i <= Global.SupportSubjectCount; i++)
+                {
+                    dt.Columns.Add("科目名稱" + i);
+                    dt.Columns.Add("科目領域" + i);
+                    dt.Columns.Add("科目節數" + i);
+                    dt.Columns.Add("科目權數" + i);
+                    dt.Columns.Add("科目成績" + i);
+                    dt.Columns.Add("科目原始成績" + i);
+                    dt.Columns.Add("科目補考成績" + i);
+                    dt.Columns.Add("科目成績等第" + i);
+                    dt.Columns.Add("科目原始成績等第" + i);
+                    dt.Columns.Add("科目補考成績等第" + i);
+                    dt.Columns.Add("科目需補考標示" + i);
+                    dt.Columns.Add("科目補考成績標示" + i);
+                    dt.Columns.Add("科目不及格標示" + i);
+                }
+
+                //領域欄位
+                for (int i = 1; i <= Global.SupportDomainCount; i++)
+                {
+                    dt.Columns.Add("領域名稱" + i);
+                    dt.Columns.Add("領域節數" + i);
+                    dt.Columns.Add("領域權數" + i);
+                    dt.Columns.Add("領域成績" + i);
+                    dt.Columns.Add("領域原始成績" + i);
+                    dt.Columns.Add("領域補考成績" + i);
+                    dt.Columns.Add("領域成績等第" + i);
+                    dt.Columns.Add("領域原始成績等第" + i);
+                    dt.Columns.Add("領域補考成績等第" + i);
+                    dt.Columns.Add("領域需補考標示" + i);
+                    dt.Columns.Add("領域補考成績標示" + i);
+                    dt.Columns.Add("領域不及格標示" + i);
+
+                }
+
+
+                //學期科目及領域成績
+                List<JHSemesterScoreRecord> SemesterScoreRecordList = JHSemesterScore.SelectBySchoolYearAndSemester(_StudentIDList, _SelSchoolYear, _SelSemester);
+                Dictionary<string, JHSemesterScoreRecord> SemesterScoreRecordDict = new Dictionary<string, JHSemesterScoreRecord>();
+                foreach (JHSemesterScoreRecord rec in SemesterScoreRecordList)
+                {
+
+                    if (!SemesterScoreRecordDict.ContainsKey(rec.RefStudentID))
+                        SemesterScoreRecordDict.Add(rec.RefStudentID, rec);
+                }
+
+                // 領域名稱
+                List<string> DomainNameList = new List<string>();
+                List<string> tempDomains = new List<string>();
+
+                foreach (JHSemesterScoreRecord SemsScore in SemesterScoreRecordList)
+                {
+                    foreach (string dn in SemsScore.Domains.Keys)
+                    {
+                        if (!DomainNameList.Contains(dn))
+                            DomainNameList.Add(dn);
+                    }
+                }
+                //   DomainNameList.Sort(new StringComparer("語文", "數學", "社會", "自然與生活科技", "健康與體育", "藝術與人文", "綜合活動"));
+
+
+                foreach (ConfigItem it in confDomainSubject.GetDomainItemList())
+                {
+                    tempDomains.Add(it.Name);
+                }
+
+                DomainNameList.Sort(new StringComparer(tempDomains.ToArray()));
+
+                if (!DomainNameList.Contains("彈性課程"))
+                    DomainNameList.Add("彈性課程");
+
+                _bgWorkReport.ReportProgress(20);
+
+                // 指定領域合併
+                foreach (string dName in DomainNameList)
+                {
+                    dt.Columns.Add(dName + "領域");
+                    dt.Columns.Add(dName + "節數");
+                    dt.Columns.Add(dName + "權數");
+                    dt.Columns.Add(dName + "成績");
+                    dt.Columns.Add(dName + "原始成績");
+                    dt.Columns.Add(dName + "補考成績");
+                    dt.Columns.Add(dName + "領域成績等第");
+                    dt.Columns.Add(dName + "原始成績等第");
+                    dt.Columns.Add(dName + "補考成績等第");
+                    dt.Columns.Add(dName + "領域需補考標示");
+                    dt.Columns.Add(dName + "領域補考成績標示");
+                    dt.Columns.Add(dName + "領域不及格標示");
+
+                }
+
+                foreach (string dName in DomainNameList)
+                {
+                    for (int j = 1; j <= 12; j++)
+                    {
+                        dt.Columns.Add(dName + "_科目名稱" + j);
+                        dt.Columns.Add(dName + "_科目領域" + j);
+                        dt.Columns.Add(dName + "_科目節數" + j);
+                        dt.Columns.Add(dName + "_科目權數" + j);
+                        dt.Columns.Add(dName + "_科目成績" + j);
+                        dt.Columns.Add(dName + "_科目原始成績" + j);
+                        dt.Columns.Add(dName + "_科目補考成績" + j);
+                        dt.Columns.Add(dName + "_科目成績等第" + j);
+                        dt.Columns.Add(dName + "_科目原始成績等第" + j);
+                        dt.Columns.Add(dName + "_科目補考成績等第" + j);
+                        dt.Columns.Add(dName + "_科目需補考標示" + j);
+                        dt.Columns.Add(dName + "_科目補考成績標示" + j);
+                        dt.Columns.Add(dName + "_科目不及格標示" + j);
+                    }
+                }
+
+
+                List<string> paList = new List<string>();
+                // 缺曠欄位
+                foreach (string aa in alist)
+                {
+                    foreach (string pp in plist)
+                    {
+                        string key = pp + "_" + aa;
+                        if (!paList.Contains(key))
+                        {
+                            dt.Columns.Add(key);
+                            paList.Add(key);
+                        }
+
+                    }
+                }
+
+
+
+                //日常生活表現欄位
+                foreach (string key in Global.DLBehaviorRef.Keys)
+                {
+                    dt.Columns.Add(key + "_Name");
+                    dt.Columns.Add(key + "_Description");
+                }
+
+                //日常生活表現子項目欄位
+                foreach (string key in _DLBehaviorConfigNameDict.Keys)
+                {
+                    int itemIndex = 0;
+
+                    if (_DLBehaviorConfigItemNameDict.ContainsKey(key))
+                    {
+                        foreach (string item in _DLBehaviorConfigItemNameDict[key])
+                        {
+                            itemIndex++;
+                            dt.Columns.Add(key + "_Item_Name" + itemIndex);
+                            dt.Columns.Add(key + "_Item_Degree" + itemIndex);
+                            dt.Columns.Add(key + "_Item_Index" + itemIndex);
+                        }
+                    }
+                }
+
+                // 
+
+                List<string> rank_typeList = new List<string>();
+                rank_typeList.Add("班排名");
+                rank_typeList.Add("年排名");
+                rank_typeList.Add("類別1排名");
+                rank_typeList.Add("類別2排名");
+
+                List<string> item_typeList = new List<string>();
+                item_typeList.Add("科目成績");
+                item_typeList.Add("科目成績(原始)");
+                item_typeList.Add("領域成績");
+                item_typeList.Add("領域成績(原始)");
+                item_typeList.Add("總計成績");
+                item_typeList.Add("總計成績(原始)");
+
+                //item_name：
+                //科目成績：科目名稱
+                //領域成績:領域名稱
+                //總計成績：學習領域總成績、課程學習總成績
+
+                // 排名、母數、pr、五標、組距
+                List<string> r2List = new List<string>();
+                r2List.Add("rank");
+                r2List.Add("matrix_count");
+                r2List.Add("pr");
+                r2List.Add("percentile");
+                r2List.Add("avg_top_25");
+                r2List.Add("avg_top_50");
+                r2List.Add("avg");
+                r2List.Add("avg_bottom_50");
+                r2List.Add("avg_bottom_25");
+                r2List.Add("level_gte100");
+                r2List.Add("level_90");
+                r2List.Add("level_80");
+                r2List.Add("level_70");
+                r2List.Add("level_60");
+                r2List.Add("level_50");
+                r2List.Add("level_40");
+                r2List.Add("level_30");
+                r2List.Add("level_20");
+                r2List.Add("level_10");
+                r2List.Add("level_lt10");
+
+                // 需要四捨五入
+                List<string> r2ListNP = new List<string>();
+                r2ListNP.Add("avg_top_25");
+                r2ListNP.Add("avg_top_50");
+                r2ListNP.Add("avg");
+                r2ListNP.Add("avg_bottom_50");
+                r2ListNP.Add("avg_bottom_25");
+
+                // 科目排
+                for (int i = 1; i <= Global.SupportSubjectCount; i++)
+                {
+                    dt.Columns.Add("科目排名名稱" + i);
+                    foreach (string rn in rank_typeList)
+                    {
+                        foreach (string r2 in r2List)
+                        {
+                            dt.Columns.Add("科目成績" + i + "_" + rn + "_" + r2);
+                            dt.Columns.Add("科目成績(原始)" + i + "_" + rn + "_" + r2);
+                        }
+                    }
+                }
+
+                // 領域排
+                for (int i = 1; i <= Global.SupportDomainCount; i++)
+                {
+                    dt.Columns.Add("領域排名名稱" + i);
+                    foreach (string rn in rank_typeList)
+                    {
+                        foreach (string r2 in r2List)
+                        {
+                            dt.Columns.Add("領域成績" + i + "_" + rn + "_" + r2);
+                            dt.Columns.Add("領域成績(原始)" + i + "_" + rn + "_" + r2);
+                        }
+                    }
+                }
+
+                // 總計成績
+                foreach (string rn in rank_typeList)
+                {
+                    foreach (string r2 in r2List)
+                    {
+                        dt.Columns.Add("總計成績_學習領域總成績" + "_" + rn + "_" + r2);
+                        dt.Columns.Add("總計成績(原始)_學習領域總成績" + "_" + rn + "_" + r2);
+                        dt.Columns.Add("總計成績_課程學習總成績" + "_" + rn + "_" + r2);
+                        dt.Columns.Add("總計成績(原始)_課程學習總成績" + "_" + rn + "_" + r2);
+                    }
+                }
+
+                // 領域排名
+                // 領域_科目
+                foreach (string dName in DomainNameList)
+                {
+                    dt.Columns.Add(dName + "領域排名名稱");
+
+                    foreach (string rn in rank_typeList)
+                    {
+                        foreach (string r in r2List)
+                        {
+                            string nn = dName + "領域成績" + "_" + rn + "_" + r;
+                            string nn1 = dName + "領域成績(原始)" + "_" + rn + "_" + r;
+                            dt.Columns.Add(nn);
+                            dt.Columns.Add(nn1);
+                        }
+                    }
+                }
+
+                // 領域_科目
+                foreach (string dName in DomainNameList)
+                {
+                    for (int i = 1; i <= 12; i++)
+                    {
+                        dt.Columns.Add(dName + "_科目排名名稱" + i);
+                        foreach (string rn in rank_typeList)
+                        {
+                            foreach (string r in r2List)
+                            {
+                                string kk = dName + "_科目成績" + i + "_" + rn + "_" + r;
+                                string kk1 = dName + "_科目成績(原始)" + i + "_" + rn + "_" + r;
+                                dt.Columns.Add(kk);
+                                dt.Columns.Add(kk1);
+                            }
+                        }
+
+                    }
+                }
+
+
+
+                List<string> classIDs = _Students.Select(x => x.RefClassID).Distinct().ToList();
+                //班級 catch
+                Dictionary<string, ClassRecord> classDic = new Dictionary<string, ClassRecord>();
+                foreach (ClassRecord cr in K12.Data.Class.SelectByIDs(classIDs))
+                {
+                    if (!classDic.ContainsKey(cr.ID))
+                        classDic.Add(cr.ID, cr);
+                }
+
+                string printDateTime = SelectTime();
+                string schoolName = K12.Data.School.ChineseName;
+                string 校長 = K12.Data.School.Configuration["學校資訊"].PreviousData.SelectSingleNode("ChancellorChineseName").InnerText;
+                string 教務主任 = K12.Data.School.Configuration["學校資訊"].PreviousData.SelectSingleNode("EduDirectorName").InnerText;
+                string schoolAddress = K12.Data.School.Configuration["學校資訊"].PreviousData.SelectSingleNode("Address").InnerText;
+                string schoolTelephone = K12.Data.School.Configuration["學校資訊"].PreviousData.SelectSingleNode("Telephone").InnerText;
+
+                _bgWorkReport.ReportProgress(40);
+
+
+                //上課天數
+                Dictionary<string, SemesterHistoryItem> SemesterHistoryRecordDict = new Dictionary<string, SemesterHistoryItem>();
+                List<SemesterHistoryRecord> SemesterHistoryRecordList = K12.Data.SemesterHistory.SelectByStudentIDs(_StudentIDList);
+                if (SemesterHistoryRecordList != null)
+                {
+                    foreach (SemesterHistoryRecord shr in SemesterHistoryRecordList)
+                    {
+                        foreach (SemesterHistoryItem shi in shr.SemesterHistoryItems)
+                        {
+                            if (shi.SchoolYear == _SelSchoolYear && shi.Semester == _SelSemester)
+                            {
+                                if (!SemesterHistoryRecordDict.ContainsKey(shr.RefStudentID))
+                                    SemesterHistoryRecordDict.Add(shr.RefStudentID, shi);
+                            }
+                        }
+                    }
+                }
+
+                // 服務學習,傳入學年度學期
+                Dictionary<string, decimal> ServiceLearningDict = Utility.GetServiceLearningDetailBySemester(_StudentIDList, _SelSchoolYear, _SelSemester);
+
+
+                // 取得學期成績排名、五標、分數區間
+                //Dictionary<string, Dictionary<string, DataRow>> SemsScoreRankMatrixDataDict = Utility.GetSemsScoreRankMatrixData(_Configure.SchoolYear, _Configure.Semester, _StudentIDList);
+                // 取得學期成績排名、五標、分數區間
+                Dictionary<string, Dictionary<string, Dictionary<string, string>>> SemsScoreRankMatrixDataValueDict = Utility.GetSemsScoreRankMatrixDataValue(_Configure.SchoolYear, _Configure.Semester, _StudentIDList);
+
+
+
+                //預設學年度學期物件
+                JHSchool.Behavior.BusinessLogic.SchoolYearSemester sysm = new JHSchool.Behavior.BusinessLogic.SchoolYearSemester(_SelSchoolYear, _SelSemester);
+                Dictionary<string, AutoSummaryRecord> AutoSummaryRecordDict = new Dictionary<string, AutoSummaryRecord>();
+                //AutoSummary
+                foreach (AutoSummaryRecord asr in AutoSummary.Select(_Students.Select(x => x.ID), new JHSchool.Behavior.BusinessLogic.SchoolYearSemester[] { sysm }))
+                {
+                    if (!AutoSummaryRecordDict.ContainsKey(asr.RefStudentID))
+                    {
+                        AutoSummaryRecordDict.Add(asr.RefStudentID, asr);
+                    }
+                }
+
+
+                List<string> tempSubject = new List<string>();
+                foreach (ConfigItem it in confDomainSubject.GetSubjectItemList())
+                    tempSubject.Add(it.Name);
+
+                // 依領域與科目排列
+                List<string> sortKey = new List<string>();
+                foreach (string dName in DomainNameList)
+                {
+                    foreach (string sName in tempSubject)
+                    {
+                        sortKey.Add(dName + "_" + sName);
+                    }
+                }
+
+                //基本資料
+                foreach (StudentRecord student in _Students)
+                {
+                    DataRow row = dt.NewRow();
+                    ClassRecord myClass = classDic.ContainsKey(student.RefClassID) ? classDic[student.RefClassID] : new ClassRecord();
+                    TeacherRecord myTeacher = myClass.Teacher != null ? myClass.Teacher : new TeacherRecord();
+
+                    JHAddressRecord AddressRecord = null;
+                    JHParentRecord ParentRecord = null;
+
+                    if (AddressRecordDict.ContainsKey(student.ID))
+                        AddressRecord = AddressRecordDict[student.ID];
+
+                    if (ParentRecordDict.ContainsKey(student.ID))
+                        ParentRecord = ParentRecordDict[student.ID];
+
+
+                    row["列印日期"] = printDateTime;
+                    row["學校名稱"] = schoolName;
+                    row["學年度"] = _SelSchoolYear;
+                    row["學期"] = _SelSemester;
+                    row["系統編號"] = "系統編號{" + student.ID + "}";
+                    row["姓名"] = student.Name;
+                    row["英文姓名"] = student.EnglishName;
+                    row["班級"] = myClass.Name + "";
+                    row["班導師"] = myTeacher.Name + "";
+                    row["座號"] = student.SeatNo + "";
+                    row["學號"] = student.StudentNumber;
+
+                    row["校長"] = 校長;
+                    row["教務主任"] = 教務主任;
+
+
+                    row["學校地址"] = schoolAddress;
+                    row["學校電話"] = schoolTelephone;
+
+                    row["服務學習時數"] = "";
+                    if (ServiceLearningDict.ContainsKey(student.ID))
+                        row["服務學習時數"] = ServiceLearningDict[student.ID];
+
+                    if (AddressRecord != null)
+                    {
+                        row["收件人地址"] = AddressRecord.MailingAddress != "" ?
+                                      AddressRecord.MailingAddress : AddressRecord.PermanentAddress;
+                        row["通訊地址"] = AddressRecord.MailingAddress;
+                        row["通訊地址郵遞區號"] = AddressRecord.MailingZipCode;
+                        row["通訊地址內容"] = AddressRecord.MailingCounty + AddressRecord.MailingTown + AddressRecord.MailingDistrict + AddressRecord.MailingArea + AddressRecord.MailingDetail;
+
+                        row["戶籍地址"] = AddressRecord.PermanentAddress;
+                        row["戶籍地址郵遞區號"] = AddressRecord.PermanentZipCode;
+                        row["戶籍地址內容"] = AddressRecord.PermanentCounty + AddressRecord.PermanentTown + AddressRecord.PermanentDistrict + AddressRecord.PermanentArea + AddressRecord.PermanentDetail;
+                    }
+
+                    if (ParentRecord != null)
+                    {
+                        row["收件人"] = ParentRecord.CustodianName != "" ? ParentRecord.CustodianName :
+                                           (ParentRecord.FatherName != "" ? ParentRecord.FatherName :
+                                               (ParentRecord.MotherName != "" ? ParentRecord.MotherName : student.Name));
+
+                        row["監護人"] = ParentRecord.CustodianName;
+                        row["父親"] = ParentRecord.FatherName;
+                        row["母親"] = ParentRecord.MotherName;
+                    }
+
+
+                    // 上課天數
+                    if (SemesterHistoryRecordDict.ContainsKey(student.ID))
+                    {
+                        row["上課天數"] = SemesterHistoryRecordDict[student.ID].SchoolDayCount;
+                    }
+
+                    // 學期科目及領域成績
+                    if (SemesterScoreRecordDict.ContainsKey(student.ID))
+                    {
+                        JHSemesterScoreRecord jsr = SemesterScoreRecordDict[student.ID];
+                        _文字描述.Clear();
+
+                        string StudentID = jsr.RefStudentID;
+
+                        // 學生類別
+                        if (Utility.StudentTag1Dict.ContainsKey(StudentID))
+                        {
+                            row["學期類別排名1"] = Utility.StudentTag1Dict[StudentID];
+                        }
+
+                        if (Utility.StudentTag2Dict.ContainsKey(StudentID))
+                        {
+                            row["學期類別排名2"] = Utility.StudentTag2Dict[StudentID];
+                        }
+
+                        //學習領域成績
+
+                        row["學習領域成績"] = jsr.LearnDomainScore.HasValue ? jsr.LearnDomainScore.Value + "" : string.Empty;
+                        row["課程學習成績"] = jsr.CourseLearnScore.HasValue ? jsr.CourseLearnScore.Value + "" : string.Empty;
+
+
+                        row["學習領域原始成績"] = jsr.LearnDomainScoreOrigin.HasValue ? jsr.LearnDomainScoreOrigin.Value + "" : string.Empty;
+                        row["課程學習原始成績"] = jsr.CourseLearnScoreOrigin.HasValue ? jsr.CourseLearnScoreOrigin.Value + "" : string.Empty;
+
+                        // 收集領域科目成績給領域科目對照時使用
+                        Dictionary<string, DomainScore> DomainScoreDict = new Dictionary<string, DomainScore>();
+                        Dictionary<string, List<SubjectScore>> DomainSubjScoreDict = new Dictionary<string, List<SubjectScore>>();
+
+
+
+                        // 
+
+
+                        #region 科目成績照領域排序
+                        List<SubjectScore> jsSubjects = new List<SubjectScore>(jsr.Subjects.Values);
+
+                        // return StringComparer.Comparer(r1.Subject, r2.Subject, tempSubject.ToArray());
+
+                        // 依領域科目排序
+                        jsSubjects.Sort(delegate (SubjectScore r1, SubjectScore r2)
+                        {
+                            string d1 = r1.Domain;
+                            string d2 = r2.Domain;
+                            if (string.IsNullOrWhiteSpace(d1))
+                                d1 = "彈性課程";
+
+                            if (string.IsNullOrWhiteSpace(d2))
+                                d2 = "彈性課程";
+
+                            string k1 = d1 + "_" + r1.Subject;
+                            string k2 = d2 + "_" + r2.Subject;
+
+                            return StringComparer.Comparer(k1, k2, sortKey.ToArray());
+                        });
+
+                        //    StreamWriter swss = new StreamWriter(Application.StartupPath + "\\ss.txt");
+                        //foreach(SubjectScore ss in jsSubjects)
+                        //{
+                        //    swss.WriteLine(ss.Subject);
+                        //}
+                        //swss.Close();
+
+                        #endregion
+
+
+                        // 合併排名、組距相關..
+                        List<string> tmpScoreItemList = new List<string>();
+                        tmpScoreItemList.Add("總計成績_學習領域總成績");
+                        tmpScoreItemList.Add("總計成績_課程學習總成績");
+                        tmpScoreItemList.Add("總計成績(原始)_學習領域總成績");
+                        tmpScoreItemList.Add("總計成績(原始)_課程學習總成績");
+                        string ssKey = "";
+                        #region 總計成績-固定排名相關
+
+                        if (SemsScoreRankMatrixDataValueDict.ContainsKey(StudentID))
+                        {
+                            foreach (string scoreName in tmpScoreItemList)
+                            {
+                                foreach (string rt in rank_typeList)
+                                {
+                                    //  ssKey = "學期/" + scoreName + "_" + rt;
+
+                                    if (SemsScoreRankMatrixDataValueDict[StudentID].ContainsKey("學期/" + scoreName + "_" + rt))
+                                    {
+                                        // 排名、pr 五標、組距
+                                        foreach (string item2 in r2List)
+                                        {
+                                            if (SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + rt].ContainsKey(item2))
+                                            {
+                                                row[scoreName + "_" + rt + "_" + item2] = SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + rt][item2];
+                                            }
+
+                                        }
+
+                                    }
+
+                                }
+                            }
+                        }
+
+
+                        #endregion
+
+                        //科目成績
+                        int count = 0;
+                        tmpScoreItemList.Clear();
+                        tmpScoreItemList.Add("科目成績");
+                        tmpScoreItemList.Add("科目成績(原始)");
+
+                        foreach (SubjectScore subj in jsSubjects)
+                        {
+                            string ssNmae = subj.Domain;
+                            if (string.IsNullOrEmpty(ssNmae))
+                                ssNmae = "彈性課程";
+                            if (!DomainSubjScoreDict.ContainsKey(ssNmae))
+                                DomainSubjScoreDict.Add(ssNmae, new List<SubjectScore>());
+
+                            DomainSubjScoreDict[ssNmae].Add(subj);
+
+                            count++;
+
+                            //超過就讓它爆炸
+                            if (count > Global.SupportSubjectCount)
+                                throw new Exception("超過支援列印科目數量: " + Global.SupportSubjectCount);
+
+                            row["科目名稱" + count] = subj.Subject;
+                            row["科目領域" + count] = string.IsNullOrWhiteSpace(subj.Domain) ? "彈性課程" : subj.Domain;
+                            row["科目節數" + count] = subj.Period + "";
+                            row["科目權數" + count] = subj.Credit + "";
+                            row["科目成績" + count] = subj.Score.HasValue ? subj.Score.Value + "" : string.Empty;
+                            row["科目原始成績" + count] = subj.ScoreOrigin.HasValue ? subj.ScoreOrigin.Value + "" : string.Empty;
+                            row["科目補考成績" + count] = subj.ScoreMakeup.HasValue ? subj.ScoreMakeup.Value + "" : string.Empty;
+                            row["科目成績等第" + count] = subj.Score.HasValue ? _ScoreMappingConfig.ParseScoreName(subj.Score.Value) : string.Empty;
+                            row["科目原始成績等第" + count] = subj.ScoreOrigin.HasValue ? _ScoreMappingConfig.ParseScoreName(subj.ScoreOrigin.Value) : string.Empty;
+                            row["科目補考成績等第" + count] = subj.ScoreMakeup.HasValue ? _ScoreMappingConfig.ParseScoreName(subj.ScoreMakeup.Value) : string.Empty;
+
+                            if (subj.ScoreMakeup.HasValue)
+                                row["科目補考成績標示" + count] = _Configure.ReScoreMark;
+
+                            if (subj.Score.HasValue && subj.Score.Value < 60)
+                            {
+                                row["科目需補考標示" + count] = _Configure.NeeedReScoreMark;
+                                row["科目不及格標示" + count] = _Configure.FailScoreMark;
+                            }
+
+
+                            #region 科目成績-固定排名相關
+
+
+                            if (SemsScoreRankMatrixDataValueDict.ContainsKey(StudentID))
+                            {
+                                row["科目排名名稱" + count] = subj.Subject;
+
+                                foreach (string scoreName in tmpScoreItemList)
+                                {
+                                    foreach (string rt in rank_typeList)
+                                    {
+                                        //   ssKey = "學期/" + scoreName + "_" + subj.Subject + "_" + rt;
+
+                                        if (SemsScoreRankMatrixDataValueDict[StudentID].ContainsKey("學期/" + scoreName + "_" + subj.Subject + "_" + rt))
+                                        {
+                                            // 排名、pr 五標、組距
+                                            foreach (string item2 in r2List)
+                                            {
+                                                if (SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + subj.Subject + "_" + rt].ContainsKey(item2))
+                                                {
+                                                    // string kk2 = scoreName + count + "_" + rt + "_" + item2;
+                                                    row[scoreName + count + "_" + rt + "_" + item2] = SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + subj.Subject + "_" + rt][item2];
+                                                }
+
+                                            }
+                                        }
+
+
+                                    }
+                                }
+                            }
+                            #endregion
+
+                        }
+
+                        tmpScoreItemList.Clear();
+                        tmpScoreItemList.Add("科目成績");
+                        tmpScoreItemList.Add("科目成績(原始)");
+                        // 處理領域科目並列               
+                        foreach (string dName in DomainNameList)
+                        {
+                            if (DomainSubjScoreDict.ContainsKey(dName))
+                            {
+                                int si = 1;
+                                foreach (SubjectScore ss in DomainSubjScoreDict[dName])
+                                {
+                                    row[dName + "_科目名稱" + si] = ss.Subject;
+                                    row[dName + "_科目領域" + si] = ss.Domain;
+                                    row[dName + "_科目節數" + si] = ss.Period + "";
+                                    row[dName + "_科目權數" + si] = ss.Credit + "";
+                                    row[dName + "_科目成績" + si] = ss.Score.HasValue ? ss.Score.Value + "" : string.Empty;
+                                    row[dName + "_科目原始成績" + si] = ss.ScoreMakeup.HasValue ? ss.ScoreMakeup.Value + "" : string.Empty;
+                                    row[dName + "_科目補考成績" + si] = ss.ScoreMakeup.HasValue ? ss.ScoreMakeup.Value + "" : string.Empty;
+                                    row[dName + "_科目成績等第" + si] = ss.Score.HasValue ? _ScoreMappingConfig.ParseScoreName(ss.Score.Value) : string.Empty;
+                                    row[dName + "_科目原始成績等第" + si] = ss.ScoreOrigin.HasValue ? _ScoreMappingConfig.ParseScoreName(ss.ScoreOrigin.Value) : string.Empty;
+                                    row[dName + "_科目補考成績等第" + si] = ss.ScoreMakeup.HasValue ? _ScoreMappingConfig.ParseScoreName(ss.ScoreMakeup.Value) : string.Empty;
+
+                                    if (ss.Score.HasValue && ss.Score.Value < 60)
+                                    {
+                                        row[dName + "_科目需補考標示" + si] = _Configure.NeeedReScoreMark;
+                                        row[dName + "_科目不及格標示" + si] = _Configure.FailScoreMark;
+                                    }
+
+                                    if (ss.ScoreMakeup.HasValue)
+                                        row["科目補考成績標示" + count] = _Configure.ReScoreMark;
+
+
+                                    #region 指定領域-科目成績-固定排名相關
+
+
+
+                                    if (SemsScoreRankMatrixDataValueDict.ContainsKey(StudentID))
+                                    {
+                                        string kn = dName + "_科目排名名稱" + si;
+                                        row[kn] = ss.Subject;
+
+                                        foreach (string scoreName in tmpScoreItemList)
+                                        {
+                                            foreach (string rn in rank_typeList)
+                                            {
+                                                //   string dssKey = "學期/" + scoreName + "_" + ss.Subject + "_" + rn;
+                                                if (SemsScoreRankMatrixDataValueDict[StudentID].ContainsKey("學期/" + scoreName + "_" + ss.Subject + "_" + rn))
+                                                {
+                                                    foreach (string r in r2List)
+                                                    {
+                                                        if (SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + ss.Subject + "_" + rn].ContainsKey(r))
+                                                        {
+                                                            //  string kv = dName + "_" + scoreName + si + "_" + rn + "_" + r;
+                                                            row[dName + "_" + scoreName + si + "_" + rn + "_" + r] = SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + ss.Subject + "_" + rn][r];
+                                                        }
+
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    #endregion
+
+                                    si++;
+                                }
+                            }
+                        }
+
+
+                        count = 0;
+
+                        tmpScoreItemList.Clear();
+                        tmpScoreItemList.Add("領域成績");
+                        tmpScoreItemList.Add("領域成績(原始)");
+
+                        foreach (string dName in DomainNameList)
+                        {
+                            if (jsr.Domains.ContainsKey(dName))
+                            {
+                                DomainScore domain = jsr.Domains[dName];
+
+                                if (!DomainScoreDict.ContainsKey(dName))
+                                    DomainScoreDict.Add(dName, domain);
+
+                                count++;
+
+                                //超過就讓它爆炸
+                                if (count > Global.SupportDomainCount)
+                                    throw new Exception("超過支援列印領域數量: " + Global.SupportDomainCount);
+
+                                row["領域名稱" + count] = domain.Domain;
+                                row["領域節數" + count] = domain.Period + "";
+                                row["領域權數" + count] = domain.Credit + "";
+                                row["領域成績" + count] = domain.Score.HasValue ? domain.Score.Value + "" : string.Empty;
+                                row["領域原始成績" + count] = domain.ScoreOrigin.HasValue ? domain.ScoreOrigin.Value + "" : string.Empty;
+                                row["領域補考成績" + count] = domain.ScoreMakeup.HasValue ? domain.ScoreMakeup.Value + "" : string.Empty;
+                                row["領域成績等第" + count] = domain.Score.HasValue ? _ScoreMappingConfig.ParseScoreName(domain.Score.Value) : string.Empty;
+                                row["領域原始成績等第" + count] = domain.ScoreOrigin.HasValue ? _ScoreMappingConfig.ParseScoreName(domain.ScoreOrigin.Value) : string.Empty;
+                                row["領域補考成績等第" + count] = domain.ScoreMakeup.HasValue ? _ScoreMappingConfig.ParseScoreName(domain.ScoreMakeup.Value) : string.Empty;
+
+                                if (domain.Score.HasValue && domain.Score.Value < 60)
+                                {
+                                    row["領域需補考標示" + count] = _Configure.NeeedReScoreMark;
+                                    row["領域不及格標示" + count] = _Configure.FailScoreMark;
+                                }
+
+                                if (domain.ScoreMakeup.HasValue)
+                                    row["領域補考成績標示" + count] = _Configure.ReScoreMark;
+
+                                if (!string.IsNullOrWhiteSpace(domain.Text))
+                                    _文字描述.Add(domain.Domain + " : " + domain.Text);
+
+
+
+
+                                #region 領域成績-固定排名相關
+
+
+                                if (SemsScoreRankMatrixDataValueDict.ContainsKey(StudentID))
+                                {
+
+                                    row["領域排名名稱" + count] = dName;
+
+                                    foreach (string scoreName in tmpScoreItemList)
+                                    {
+                                        foreach (string rt in rank_typeList)
+                                        {
+                                            // ssKey = "學期/" + scoreName + "_" + dName + "_" + rt;
+                                            if (SemsScoreRankMatrixDataValueDict[StudentID].ContainsKey("學期/" + scoreName + "_" + dName + "_" + rt))
+                                            {
+                                                // 排名、pr 五標、組距
+                                                foreach (string item2 in r2List)
+                                                {
+                                                    if (SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + dName + "_" + rt].ContainsKey(item2))
+                                                    {
+                                                        //  string kk2 = scoreName + count + "_" + rt + "_" + item2;
+
+                                                        row[scoreName + count + "_" + rt + "_" + item2] = SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + dName + "_" + rt][item2];
+                                                    }
+
+                                                }
+                                            }
+
+                                        }
+                                    }
+
+                                }
+
+
+                                #endregion
+
+                            }
+                        }
+
+
+                        // 處理指定領域
+                        tmpScoreItemList.Clear();
+                        tmpScoreItemList.Add("領域成績");
+                        tmpScoreItemList.Add("領域成績(原始)");
+                        foreach (string dName in DomainNameList)
+                        {
+                            if (DomainScoreDict.ContainsKey(dName))
+                            {
+                                DomainScore domain = DomainScoreDict[dName];
+
+                                row[dName + "領域"] = domain.Domain;
+                                row[dName + "節數"] = domain.Period + "";
+                                row[dName + "權數"] = domain.Credit + "";
+                                row[dName + "成績"] = domain.Score.HasValue ? domain.Score.Value + "" : string.Empty;
+                                row[dName + "原始成績"] = domain.ScoreOrigin.HasValue ? domain.ScoreOrigin.Value + "" : string.Empty;
+                                row[dName + "補考成績"] = domain.ScoreMakeup.HasValue ? domain.ScoreMakeup.Value + "" : string.Empty;
+                                row[dName + "領域成績等第"] = domain.Score.HasValue ? _ScoreMappingConfig.ParseScoreName(domain.Score.Value) : string.Empty;
+                                row[dName + "原始成績等第"] = domain.ScoreOrigin.HasValue ? _ScoreMappingConfig.ParseScoreName(domain.ScoreOrigin.Value) : string.Empty;
+                                row[dName + "補考成績等第"] = domain.ScoreMakeup.HasValue ? _ScoreMappingConfig.ParseScoreName(domain.ScoreMakeup.Value) : string.Empty;
+
+                                if (domain.Score.HasValue && domain.Score.Value < 60)
+                                {
+                                    row[dName + "領域需補考標示"] = _Configure.NeeedReScoreMark;
+                                    row[dName + "領域不及格標示"] = _Configure.FailScoreMark;
+                                }
+
+                                if (domain.ScoreMakeup.HasValue)
+                                    row[dName + "領域補考成績標示"] = _Configure.ReScoreMark;
+
+
+                                #region 指定領域成績-固定排名相關
+
+                                if (SemsScoreRankMatrixDataValueDict.ContainsKey(StudentID))
+                                {
+                                    string kn = domain.Domain + "領域排名名稱";
+                                    row[kn] = domain.Domain;
+                                    foreach (string scoreName in tmpScoreItemList)
+                                    {
+                                        foreach (string rn in rank_typeList)
+                                        {
+                                            // string dssKey = "學期/" + scoreName + "_" + domain.Domain + "_" + rn;
+
+                                            if (SemsScoreRankMatrixDataValueDict[StudentID].ContainsKey("學期/" + scoreName + "_" + domain.Domain + "_" + rn))
+                                            {
+                                                foreach (string r in r2List)
+                                                {
+                                                    if (SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + domain.Domain + "_" + rn].ContainsKey(r))
+                                                    {
+                                                        // string kv = domain.Domain + scoreName + "_" + rn + "_" + r;
+
+                                                        row[domain.Domain + scoreName + "_" + rn + "_" + r] = SemsScoreRankMatrixDataValueDict[StudentID]["學期/" + scoreName + "_" + domain.Domain + "_" + rn][r];
+
+                                                    }
+
+                                                }
+                                            }
+
+
+                                        }
+                                    }
+
+                                }
+
+
+
+                                #endregion
+
+                            }
+                        }
+
+
+                        // 學務相關資料
+                        // 缺曠預設填0
+                        foreach (string str in paList)
+                            row[str] = 0;
+
+                        if (AutoSummaryRecordDict.ContainsKey(student.ID))
+                        {
+                            AutoSummaryRecord asr = AutoSummaryRecordDict[student.ID];
+                            //缺曠
+                            foreach (AbsenceCountRecord acr in asr.AbsenceCounts)
+                            {
+                                string key = Global.GetKey(acr.PeriodType, acr.Name);
+
+                                if (dt.Columns.Contains(key))
+                                {
+                                    int counta = 0;
+                                    int.TryParse(row[key] + "", out counta);
+
+                                    counta += acr.Count;
+                                    row[key] = counta;
+                                }
+                            }
+
+                            //獎懲
+                            row["大功"] = asr.MeritA;
+                            row["小功"] = asr.MeritB;
+                            row["嘉獎"] = asr.MeritC;
+                            row["大過"] = asr.DemeritA;
+                            row["小過"] = asr.DemeritB;
+                            row["警告"] = asr.DemeritC;
+
+                            //日常生活表現
+                            JHMoralScoreRecord msr = asr.MoralScore;
+                            XmlElement textScore = (msr != null && msr.TextScore != null) ? msr.TextScore : K12.Data.XmlHelper.LoadXml("<TextScore/>");
+
+                            foreach (string key in Global.DLBehaviorRef.Keys)
+                                SetDLBehaviorData(key, Global.DLBehaviorRef[key], textScore, row);
+                        }
+
+
+                        row["文字描述"] = string.Join(Environment.NewLine, _文字描述);
+
+                    }
+
+
+                    dt.Rows.Add(row);
+
+                    //_StudentRowDict.Add(student.ID, row);
+                }
+
+
+
+
+
+
+                _bgWorkReport.ReportProgress(90);
+
+
+
+
+
+
+
+                _bgWorkReport.ReportProgress(100);
+
+                //#region 將 DataTable 內合併欄位產生出來
+                //StreamWriter sw = new StreamWriter(Application.StartupPath + "\\學期成績單合併欄位.txt");
+                //foreach (DataColumn dc in dt.Columns)
+                //    sw.WriteLine(dc.Caption);
+                //sw.Close();
+                //#endregion
+
+                //dt.TableName = "score";
+                //dt.WriteXml(Application.StartupPath + "\\score.xml");
+
+
+                Document doc = _Configure.Template;
+                doc.MailMerge.Execute(dt);
+                doc.MailMerge.DeleteFields();
+                e.Result = doc;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+
+
+        }
+
+
+        /// <summary>
+        /// 取得日常生活表現設定名稱
+        /// </summary>
+        /// <returns></returns>
+        private static Dictionary<string, string> GetDLBehaviorConfigNameDict()
+        {
+            Dictionary<string, string> retVal = new Dictionary<string, string>();
+            try
+            {
+                _DLBehaviorConfigItemNameDict.Clear();
+
+                // 包含新竹與高雄
+                K12.Data.Configuration.ConfigData cd = K12.Data.School.Configuration["DLBehaviorConfig"];
+                if (!string.IsNullOrEmpty(cd["DailyBehavior"]))
+                {
+                    string key = "日常生活表現程度";
+                    //日常行為表現
+                    XElement e1 = XElement.Parse(cd["DailyBehavior"]);
+                    string name = e1.Attribute("Name").Value;
+                    retVal.Add(key, name);
+
+                    // 日常生活表現子項目
+                    List<string> items = ParseItems(e1);
+                    if (items.Count > 0)
+                        _DLBehaviorConfigItemNameDict.Add(key, items);
+                }
+
+                //if (!string.IsNullOrEmpty(cd["GroupActivity"]))
+                //{
+                //    string key = "團體活動表現";
+                //    //團體活動表現
+                //    XElement e4 = XElement.Parse(cd["GroupActivity"]);
+                //    string name = e4.Attribute("Name").Value;
+                //    retVal.Add(key, name);
+
+                //    // 團體活動表現
+                //    List<string> items = ParseItems(e4);
+                //    if (items.Count > 0)
+                //        _DLBehaviorConfigItemNameDict.Add(key, items);
+
+                //}
+
+                //if (!string.IsNullOrEmpty(cd["PublicService"]))
+                //{
+                //    string key = "公共服務表現";
+                //    //公共服務表現
+                //    XElement e5 = XElement.Parse(cd["PublicService"]);
+                //    string name = e5.Attribute("Name").Value;
+                //    retVal.Add(key, name);
+                //    List<string> items = ParseItems(e5);
+                //    if (items.Count > 0)
+                //        _DLBehaviorConfigItemNameDict.Add(key, items);
+
+                //}
+
+                //if (!string.IsNullOrEmpty(cd["SchoolSpecial"]))
+                //{
+                //    string key = "校內外特殊表現";
+                //    //校內外特殊表現,新竹沒有子項目，高雄有子項目
+                //    XElement e6 = XElement.Parse(cd["SchoolSpecial"]);
+                //    string name = e6.Attribute("Name").Value;
+                //    retVal.Add(key, name);
+                //    List<string> items = ParseItems(e6);
+                //    if (items.Count > 0)
+                //        _DLBehaviorConfigItemNameDict.Add(key, items);
+                //}
+
+                if (!string.IsNullOrEmpty(cd["OtherRecommend"]))
+                {
+                    //其他表現
+                    XElement e2 = XElement.Parse(cd["OtherRecommend"]);
+                    string name = e2.Attribute("Name").Value;
+                    retVal.Add("團體活動表現", name);
+                }
+
+                if (!string.IsNullOrEmpty(cd["DailyLifeRecommend"]))
+                {
+                    //日常生活表現具體建議
+                    XElement e3 = XElement.Parse(cd["DailyLifeRecommend"]);
+                    string name = e3.Attribute("Name").Value;
+                    //    retVal.Add("具體建議", name);  // 高雄
+                    retVal.Add("日常生活表現具體建議", name);  // 新竹
+                }
+            }
+            catch (Exception ex)
+            {
+                FISCA.Presentation.Controls.MsgBox.Show("日常生活表現設定檔解析失敗!" + ex.Message);
+            }
+
+            return retVal;
+        }
+
+        /// <summary>
+        /// XML 內解析子項目名稱
+        /// </summary>
+        /// <param name="elm"></param>
+        /// <returns></returns>
+        private static List<string> ParseItems(XElement elm)
+        {
+            List<string> retVal = new List<string>();
+
+            foreach (XElement subElm in elm.Elements("Item"))
+            {
+                // 因為社團功能，所以要將"社團活動" 字不放入
+                string name = subElm.Attribute("Name").Value;
+                if (name != "社團活動")
+                    retVal.Add(name);
+            }
+            return retVal;
+        }
+
+        /// <summary>
+        /// 填寫日常生活表現資料
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="path"></param>
+        /// <param name="textScore"></param>
+        /// <param name="row"></param>
+
+        private static void SetDLBehaviorData(string name, string path, XmlElement textScore, DataRow row)
+        {
+            row[name + "_Name"] = _DLBehaviorConfigNameDict.ContainsKey(name) ? _DLBehaviorConfigNameDict[name] : string.Empty;
+
+            if (_DLBehaviorConfigItemNameDict.ContainsKey(name))
+            {
+                int index = 0;
+                foreach (string itemName in _DLBehaviorConfigItemNameDict[name])
+                {
+                    foreach (XmlElement item in textScore.SelectNodes(path))
+                    {
+                        if (itemName == item.GetAttribute("Name"))
+                        {
+                            index++;
+                            row[name + "_Item_Name" + index] = itemName;
+                            row[name + "_Item_Index" + index] = item.GetAttribute("Index");
+                            row[name + "_Item_Degree" + index] = item.GetAttribute("Degree");
+                        }
+                    }
+                }
+            }
+            else if (_DLBehaviorConfigNameDict.ContainsKey(name))
+            {
+                string value = _DLBehaviorConfigNameDict[name];
+
+                foreach (XmlElement item in textScore.SelectNodes(path))
+                {
+                    if (value == item.GetAttribute("Name"))
+                        row[name + "_Description"] = item.GetAttribute("Description");
+                }
+            }
+        }
+
+
+        private static string SelectTime() //取得Server的時間
+        {
+            QueryHelper qh = new QueryHelper();
+            DataTable dtable = qh.Select("select now()"); //取得時間
+            DateTime dt = DateTime.Now;
+            DateTime.TryParse("" + dtable.Rows[0][0], out dt); //Parse資料
+            string ComputerSendTime = dt.ToString("yyyy/MM/dd"); //最後時間
+
+            return ComputerSendTime;
+        }
+
+
+
+        private void _bgWorkerLoadData_ProgressChanged(object sender, ProgressChangedEventArgs e)
+        {
+
+            FISCA.Presentation.MotherForm.SetStatusBarMessage("學期成績報表資料讀取中...", e.ProgressPercentage);
+        }
+
+        private void _bgWorkerLoadData_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            if (_Configure == null)
+                _Configure = new Configure();
+
+            _DefalutSchoolYear = K12.Data.School.DefaultSchoolYear;
+            _DefaultSemester = K12.Data.School.DefaultSemester;
+
+            cboConfigure.Items.Clear();
+            foreach (var item in _ConfigureList)
+            {
+                cboConfigure.Items.Add(item);
+            }
+            cboConfigure.Items.Add(new Configure() { Name = "新增" });
+            int i;
+
+            if (int.TryParse(_DefalutSchoolYear, out i))
+            {
+                for (int j = 5; j > 0; j--)
+                {
+                    cboSchoolYear.Items.Add("" + (i - j));
+                }
+
+                for (int j = 0; j < 3; j++)
+                {
+                    cboSchoolYear.Items.Add("" + (i + j));
+                }
+
+            }
+
+            cboSemester.Items.Add("1");
+            cboSemester.Items.Add("2");
+
+
+            string userSelectConfigName = "";
+            // 檢查畫面上是否有使用者選的
+            foreach (DAO.UDT_ScoreConfig conf in _UDTConfigList)
+                if (conf.Type == Global._UserConfTypeName)
+                {
+                    userSelectConfigName = conf.Name;
+                    break;
+                }
+
+            if (!string.IsNullOrEmpty(userSelectConfigName))
+                cboConfigure.Text = userSelectConfigName;
+
+            EnableSelectItem(true);
+            FISCA.Presentation.MotherForm.SetStatusBarMessage("");
+        }
+
+        private void _bgWorkerLoadData_DoWork(object sender, DoWorkEventArgs e)
+        {
+            _bgWorkerLoadData.ReportProgress(1);
+            // 檢查預設樣板是否存在
+            _UDTConfigList = DAO.UDTTransfer.GetDefaultConfigNameListByTableName(Global._UDTTableName);
+
+            // 沒有設定檔，建立預設設定檔
+            if (_UDTConfigList.Count < 2)
+            {
+                _bgWorkerLoadData.ReportProgress(20);
+                foreach (string name in Global.DefaultConfigNameList())
+                {
+                    Configure cn = new Configure();
+                    cn.Name = name;
+                    cn.SchoolYear = K12.Data.School.DefaultSchoolYear;
+                    cn.Semester = K12.Data.School.DefaultSemester;
+                    DAO.UDT_ScoreConfig conf = new DAO.UDT_ScoreConfig();
+                    conf.Name = name;
+                    conf.UDTTableName = Global._UDTTableName;
+                    conf.ProjectName = Global._ProjectName;
+                    conf.Type = Global._DefaultConfTypeName;
+                    _UDTConfigList.Add(conf);
+
+                    // 設預設樣板
+                    switch (name)
+                    {
+                        //case "領域成績單":
+                        //    cn.Template = new Document(new MemoryStream(Properties.Resources.新竹_領域成績單));
+                        //    break;
+
+
+                    }
+
+                    if (cn.Template == null)
+                        cn.Template = new Document(new MemoryStream(Properties.Resources.新竹學期成績單樣板_固定排名_科目_領域));
+                    cn.Encode();
+                    cn.Save();
+                }
+                if (_UDTConfigList.Count > 0)
+                    DAO.UDTTransfer.InsertConfigData(_UDTConfigList);
+            }
+
+            _bgWorkerLoadData.ReportProgress(30);
+            // get 地址
+            List<JHAddressRecord> tmpAddressRecord = JHAddress.SelectByStudentIDs(_StudentIDList);
+            AddressRecordDict.Clear();
+            foreach (JHAddressRecord rec in tmpAddressRecord)
+            {
+                if (!AddressRecordDict.ContainsKey(rec.RefStudentID))
+                    AddressRecordDict.Add(rec.RefStudentID, rec);
+            }
+
+            _bgWorkerLoadData.ReportProgress(50);
+            // get 父母監護人
+            List<JHParentRecord> tmpParentRecord = JHParent.SelectByStudentIDs(_StudentIDList);
+            ParentRecordDict.Clear();
+            foreach (JHParentRecord rec in tmpParentRecord)
+            {
+                if (!ParentRecordDict.ContainsKey(rec.RefStudentID))
+                    ParentRecordDict.Add(rec.RefStudentID, rec);
+            }
+
+            _bgWorkerLoadData.ReportProgress(70);
+            // 取的設定資料
+            _ConfigureList = _AccessHelper.Select<Configure>();
+
+            _bgWorkerLoadData.ReportProgress(100);
+        }
+
+        private void PrintForm_Load(object sender, EventArgs e)
+        {
+            this.MaximumSize = this.MinimumSize = this.Size;
+            EnableSelectItem(false);
+            _SelSchoolYear = int.Parse(K12.Data.School.DefaultSchoolYear);
+            _SelSemester = int.Parse(K12.Data.School.DefaultSemester);
+            _ScoreMappingConfig.LoadData();
+            _bgWorkerLoadData.RunWorkerAsync();
+
+        }
+
+
+        // 啟用項目
+        private void EnableSelectItem(bool enable)
+        {
+            cboConfigure.Enabled = enable;
+            cboSchoolYear.Enabled = enable;
+            cboSemester.Enabled = enable;
+            lnkViewTemplate.Enabled = enable;
+            lnkChangeTemplate.Enabled = enable;
+            lnkViewMapColumns.Enabled = enable;
+            btnSaveConfig.Enabled = enable;
+            btnPrint.Enabled = enable;
+            txtFailScoreMark.Enabled = enable;
+            txtNeeedReScoreMark.Enabled = enable;
+            txtReScoreMark.Enabled = enable;
+        }
+
+
+
+        private void lnkCopyConfig_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            if (_Configure == null) return;
+            CloneConfigure dialog = new CloneConfigure() { ParentName = _Configure.Name };
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                Configure conf = new Configure();
+                conf.Name = dialog.NewConfigureName;
+                conf.PrintSubjectList.AddRange(_Configure.PrintSubjectList);
+                conf.SchoolYear = _Configure.SchoolYear;
+                conf.Semester = _Configure.Semester;
+                conf.SubjectLimit = _Configure.SubjectLimit;
+                conf.Template = _Configure.Template;
+                conf.NeeedReScoreMark = _Configure.NeeedReScoreMark;
+                conf.ReScoreMark = _Configure.ReScoreMark;
+                conf.FailScoreMark = _Configure.FailScoreMark;
+
+                if (conf.PrintAttendanceList == null)
+                    conf.PrintAttendanceList = new List<string>();
+                conf.PrintAttendanceList.AddRange(_Configure.PrintAttendanceList);
+                conf.Encode();
+                conf.Save();
+                _ConfigureList.Add(conf);
+                cboConfigure.Items.Insert(cboConfigure.Items.Count - 1, conf);
+                cboConfigure.SelectedIndex = cboConfigure.Items.Count - 2;
+            }
+        }
+
+        public Configure _Configure { get; private set; }
+
+        private void lnkDelConfig_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            if (_Configure == null) return;
+
+            // 檢查是否是預設設定檔名稱，如果是無法刪除
+            if (Global.DefaultConfigNameList().Contains(_Configure.Name))
+            {
+                FISCA.Presentation.Controls.MsgBox.Show("系統預設設定檔案無法刪除");
+                return;
+            }
+
+            if (MessageBox.Show("樣板刪除後將無法回復，確定刪除樣板?", "刪除樣板", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == System.Windows.Forms.DialogResult.OK)
+            {
+                _ConfigureList.Remove(_Configure);
+                if (_Configure.UID != "")
+                {
+                    _Configure.Deleted = true;
+                    _Configure.Save();
+                }
+                var conf = _Configure;
+                cboConfigure.SelectedIndex = -1;
+                cboConfigure.Items.Remove(conf);
+            }
+        }
+
+        private void btnCancel_Click(object sender, EventArgs e)
+        {
+            this.Close();
+        }
+
+
+        private void btnPrint_Click(object sender, EventArgs e)
+        {
+            int sc, ss;
+            if (int.TryParse(cboSchoolYear.Text, out sc))
+            {
+                _SelSchoolYear = sc;
+            }
+            else
+            {
+                FISCA.Presentation.Controls.MsgBox.Show("學年度必填!");
+                return;
+            }
+
+            if (int.TryParse(cboSemester.Text, out ss))
+            {
+                _SelSemester = ss;
+            }
+            else
+            {
+                FISCA.Presentation.Controls.MsgBox.Show("學期必填!");
+                return;
+            }
+
+
+            SaveTemplate(null, null);
+
+            btnSaveConfig.Enabled = false;
+
+
+            this.DialogResult = System.Windows.Forms.DialogResult.OK;
+            this.Close();
+            // 執行報表
+            _bgWorkReport.RunWorkerAsync();
+        }
+
+        // 儲存樣板
+        private void SaveTemplate(object sender, EventArgs e)
+        {
+            if (_Configure == null) return;
+            _Configure.SchoolYear = cboSchoolYear.Text;
+            _Configure.Semester = cboSemester.Text;
+            _Configure.SelSetConfigName = cboConfigure.Text;
+            _Configure.NeeedReScoreMark = txtNeeedReScoreMark.Text;
+            _Configure.ReScoreMark = txtReScoreMark.Text;
+            _Configure.FailScoreMark = txtFailScoreMark.Text;
+
+            if (_Configure.PrintAttendanceList == null)
+                _Configure.PrintAttendanceList = new List<string>();
+
+            _Configure.PrintAttendanceList.Clear();
+
+            _Configure.Encode();
+            _Configure.Save();
+
+            #region 樣板設定檔記錄用
+
+            // 記錄使用這選的專案            
+            List<DAO.UDT_ScoreConfig> uList = new List<DAO.UDT_ScoreConfig>();
+            foreach (DAO.UDT_ScoreConfig conf in _UDTConfigList)
+                if (conf.Type == Global._UserConfTypeName)
+                {
+                    conf.Name = cboConfigure.Text;
+                    uList.Add(conf);
+                    break;
+                }
+
+            if (uList.Count > 0)
+            {
+                DAO.UDTTransfer.UpdateConfigData(uList);
+            }
+            else
+            {
+                // 新增
+                List<DAO.UDT_ScoreConfig> iList = new List<DAO.UDT_ScoreConfig>();
+                DAO.UDT_ScoreConfig conf = new DAO.UDT_ScoreConfig();
+                conf.Name = cboConfigure.Text;
+                conf.ProjectName = Global._ProjectName;
+                conf.Type = Global._UserConfTypeName;
+                conf.UDTTableName = Global._UDTTableName;
+                iList.Add(conf);
+                DAO.UDTTransfer.InsertConfigData(iList);
+            }
+            #endregion
+        }
+
+
+        private void cboConfigure_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cboConfigure.SelectedIndex == cboConfigure.Items.Count - 1)
+            {
+                //新增
+                btnSaveConfig.Enabled = btnPrint.Enabled = false;
+                NewConfigure dialog = new NewConfigure();
+                if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+
+                    _Configure = new Configure();
+                    _Configure.Name = dialog.ConfigName;
+                    _Configure.Template = dialog.Template;
+                    _Configure.SubjectLimit = dialog.SubjectLimit;
+                    _Configure.SchoolYear = _DefalutSchoolYear;
+                    _Configure.Semester = _DefaultSemester;
+                    if (_Configure.PrintAttendanceList == null)
+                        _Configure.PrintAttendanceList = new List<string>();
+                    if (_Configure.PrintSubjectList == null)
+                        _Configure.PrintSubjectList = new List<string>();
+
+
+                    _ConfigureList.Add(_Configure);
+                    cboConfigure.Items.Insert(cboConfigure.SelectedIndex, _Configure);
+                    cboConfigure.SelectedIndex = cboConfigure.SelectedIndex - 1;
+                    _Configure.Encode();
+                    _Configure.Save();
+                }
+                else
+                {
+                    cboConfigure.SelectedIndex = -1;
+                }
+            }
+            else
+            {
+                if (cboConfigure.SelectedIndex >= 0)
+                {
+                    btnSaveConfig.Enabled = btnPrint.Enabled = true;
+                    _Configure = _ConfigureList[cboConfigure.SelectedIndex];
+                    if (_Configure.Template == null)
+                        _Configure.Decode();
+                    if (!cboSchoolYear.Items.Contains(_Configure.SchoolYear))
+                        cboSchoolYear.Items.Add(_Configure.SchoolYear);
+                    cboSchoolYear.Text = _Configure.SchoolYear;
+                    cboSemester.Text = _Configure.Semester;
+                    txtFailScoreMark.Text = _Configure.FailScoreMark;
+                    txtReScoreMark.Text = _Configure.ReScoreMark;
+                    txtNeeedReScoreMark.Text = _Configure.NeeedReScoreMark;
+                }
+                else
+                {
+                    _Configure = null;
+                    cboSchoolYear.SelectedIndex = -1;
+                    cboSemester.SelectedIndex = -1;
+
+                }
+            }
+        }
+
+        private void lnkViewTemplate_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            // 當沒有設定檔
+            if (_Configure == null) return;
+            lnkViewTemplate.Enabled = false;
+            #region 儲存檔案
+
+            string reportName = "新竹學期成績單樣板(" + _Configure.Name + ")";
+
+            string path = Path.Combine(System.Windows.Forms.Application.StartupPath, "Reports");
+            if (!Directory.Exists(path))
+                Directory.CreateDirectory(path);
+            path = Path.Combine(path, reportName + ".doc");
+
+            if (File.Exists(path))
+            {
+                int i = 1;
+                while (true)
+                {
+                    string newPath = Path.GetDirectoryName(path) + "\\" + Path.GetFileNameWithoutExtension(path) + (i++) + Path.GetExtension(path);
+                    if (!File.Exists(newPath))
+                    {
+                        path = newPath;
+                        break;
+                    }
+                }
+            }
+
+            try
+            {
+                System.IO.FileStream stream = new FileStream(path, FileMode.Create, FileAccess.Write);
+                _Configure.Template.Save(stream, Aspose.Words.SaveFormat.Doc);
+
+                stream.Flush();
+                stream.Close();
+                System.Diagnostics.Process.Start(path);
+            }
+            catch
+            {
+                System.Windows.Forms.SaveFileDialog sd = new System.Windows.Forms.SaveFileDialog();
+                sd.Title = "另存新檔";
+                sd.FileName = reportName + ".doc";
+                sd.Filter = "Word檔案 (*.doc)|*.doc|所有檔案 (*.*)|*.*";
+                if (sd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    try
+                    {
+                        System.IO.FileStream stream = new FileStream(sd.FileName, FileMode.Create, FileAccess.Write);
+                        stream.Write(Properties.Resources.新竹學期成績單樣板_固定排名_科目_領域, 0, Properties.Resources.新竹學期成績單樣板_固定排名_科目_領域.Length);
+                        stream.Flush();
+                        stream.Close();
+
+                    }
+                    catch
+                    {
+                        FISCA.Presentation.Controls.MsgBox.Show("指定路徑無法存取。", "建立檔案失敗", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                        return;
+                    }
+                }
+            }
+            lnkViewTemplate.Enabled = true;
+            #endregion
+        }
+
+        private void lnkChangeTemplate_LinkClicked(object sender, System.Windows.Forms.LinkLabelLinkClickedEventArgs e)
+        {
+            if (_Configure == null) return;
+            lnkChangeTemplate.Enabled = false;
+            OpenFileDialog dialog = new OpenFileDialog();
+            dialog.Title = "上傳樣板";
+            dialog.Filter = "Word檔案 (*.doc)|*.doc|所有檔案 (*.*)|*.*";
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                try
+                {
+                    _Configure.Template = new Aspose.Words.Document(dialog.FileName);
+                    List<string> fields = new List<string>(_Configure.Template.MailMerge.GetFieldNames());
+                    _Configure.SubjectLimit = 0;
+                    while (fields.Contains("科目名稱" + (_Configure.SubjectLimit + 1)))
+                    {
+                        _Configure.SubjectLimit++;
+                    }
+
+                }
+                catch
+                {
+                    MessageBox.Show("樣板開啟失敗");
+                }
+            }
+            lnkChangeTemplate.Enabled = true;
+        }
+
+        private void lnkViewMapColumns_LinkClicked(object sender, System.Windows.Forms.LinkLabelLinkClickedEventArgs e)
+        {
+            int sc, ss;
+            if (int.TryParse(cboSchoolYear.Text, out sc))
+            {
+                _SelSchoolYear = sc;
+            }
+            else
+            {
+                FISCA.Presentation.Controls.MsgBox.Show("學年度必填!");
+                return;
+            }
+
+            if (int.TryParse(cboSemester.Text, out ss))
+            {
+                _SelSemester = ss;
+            }
+            else
+            {
+                FISCA.Presentation.Controls.MsgBox.Show("學期必填!");
+                return;
+            }
+
+            lnkViewMapColumns.Enabled = false;
+
+            Global._SelSchoolYear = _SelSchoolYear;
+            Global._SelSemester = _SelSemester;
+            Global._SelStudentIDList = _StudentIDList;
+
+            Global.ExportMappingFieldWord();
+            lnkViewMapColumns.Enabled = true;
+        }
+
+
+    }
+}
