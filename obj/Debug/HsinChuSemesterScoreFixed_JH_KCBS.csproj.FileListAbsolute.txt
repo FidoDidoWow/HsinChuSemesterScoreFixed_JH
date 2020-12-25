@@ -1,0 +1,13 @@
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\bin\Debug\HsinChuSemesterScoreFixed_JH_KCBS.dll
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\bin\Debug\HsinChuSemesterScoreFixed_JH_KCBS.pdb
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\bin\Debug\JHScoreReportDAL.dll
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.csprojAssemblyReference.cache
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH.CloneConfigure.resources
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH.NewConfigure.resources
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH.PrintForm.resources
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH.Properties.Resources.resources
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.csproj.GenerateResource.cache
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.csproj.CoreCompileInputs.cache
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.csproj.CopyComplete
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.dll
+C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.pdb

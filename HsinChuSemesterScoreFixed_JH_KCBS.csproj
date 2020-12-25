@@ -8,7 +8,7 @@
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>HsinChuSemesterScoreFixed_JH</RootNamespace>
-    <AssemblyName>HsinChuSemesterScoreFixed_JH</AssemblyName>
+    <AssemblyName>HsinChuSemesterScoreFixed_JH_KCBS</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>

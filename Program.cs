@@ -20,8 +20,8 @@ namespace HsinChuSemesterScoreFixed_JH
         public static void Main()
         {
             RibbonBarItem rbItem1 = MotherForm.RibbonBarItems["學生", "資料統計"];
-            rbItem1["報表"]["成績相關報表"]["學期成績通知單(固定排名)"].Enable = UserAcl.Current["9C776D1D-5C08-482A-95EB-91CBD965011C"].Executable;
-            rbItem1["報表"]["成績相關報表"]["學期成績通知單(固定排名)"].Click += delegate
+            rbItem1["報表"]["成績相關報表"]["成績通知單(康橋)"]["學期成績通知單(固定排名)(康橋懲戒)"].Enable = UserAcl.Current["9C776D1D-5C08-482A-95EB-91CBD965011C_KCBS"].Executable;
+            rbItem1["報表"]["成績相關報表"]["成績通知單(康橋)"]["學期成績通知單(固定排名)(康橋懲戒)"].Click += delegate
             {
                 if (K12.Presentation.NLDPanels.Student.SelectedSource.Count > 0)
                 {
@@ -37,8 +37,8 @@ namespace HsinChuSemesterScoreFixed_JH
             };
 
             RibbonBarItem rbItem2 = MotherForm.RibbonBarItems["班級", "資料統計"];
-            rbItem2["報表"]["成績相關報表"]["學期成績通知單(固定排名)"].Enable = UserAcl.Current["9C776D1D-5C08-482A-95EB-91CBD965011C"].Executable;
-            rbItem2["報表"]["成績相關報表"]["學期成績通知單(固定排名)"].Click += delegate
+            rbItem2["報表"]["成績相關報表"]["成績通知單(康橋)"]["學期成績通知單(固定排名)(康橋懲戒)"].Enable = UserAcl.Current["9C776D1D-5C08-482A-95EB-91CBD965011C_KCBS"].Executable;
+            rbItem2["報表"]["成績相關報表"]["成績通知單(康橋)"]["學期成績通知單(固定排名)(康橋懲戒)"].Click += delegate
             {
                 if (K12.Presentation.NLDPanels.Class.SelectedSource.Count > 0)
                 {
@@ -56,7 +56,7 @@ namespace HsinChuSemesterScoreFixed_JH
             };
             // 學期成績通知單
             Catalog catalog1a = RoleAclSource.Instance["學生"]["功能按鈕"];
-            catalog1a.Add(new RibbonFeature("9C776D1D-5C08-482A-95EB-91CBD965011C", "學期成績通知單(固定排名)"));
+            catalog1a.Add(new RibbonFeature("9C776D1D-5C08-482A-95EB-91CBD965011C_KCBS", "學期成績通知單(固定排名)(康橋懲戒)"));
 
 
         }
