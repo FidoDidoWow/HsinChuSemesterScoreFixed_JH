@@ -1459,6 +1459,16 @@ namespace HsinChuSemesterScoreFixed_JH
                 conf.ReScoreMark = _Configure.ReScoreMark;
                 conf.FailScoreMark = _Configure.FailScoreMark;
 
+                conf.BeginDateAttend = _Configure.BeginDateAttend;
+                conf.EndDateAttend = _Configure.EndDateAttend;
+
+                conf.BeginDateMerit = _Configure.BeginDateMerit;
+                conf.EndDateMerit = _Configure.EndDateMerit;
+                conf.BeginDateDermit = _Configure.BeginDateDermit;
+                conf.EndDateDermit = _Configure.EndDateDermit;
+                conf.BeginDateSevice = _Configure.BeginDateSevice;
+                conf.EndDateSevice = _Configure.BeginDateSevice;
+
                 if (conf.PrintAttendanceList == null)
                     conf.PrintAttendanceList = new List<string>();
                 conf.PrintAttendanceList.AddRange(_Configure.PrintAttendanceList);
@@ -1549,6 +1559,17 @@ namespace HsinChuSemesterScoreFixed_JH
             _Configure.ReScoreMark = txtReScoreMark.Text;
             _Configure.FailScoreMark = txtFailScoreMark.Text;
 
+            // 儲存開始與結束日期
+            _Configure.BeginDateAttend = dtBeginAttend.Value.ToShortDateString();
+            _Configure.EndDateAttend = dtEndAttend.Value.ToShortDateString();
+
+            _Configure.BeginDateMerit = dtBeginMerit.Value.ToShortDateString();
+            _Configure.EndDateMerit = dtEndMerit.Value.ToShortDateString();
+            _Configure.BeginDateDermit = dtBeginDermit.Value.ToShortDateString();
+            _Configure.EndDateDermit = dtEndDermit.Value.ToShortDateString();
+            _Configure.BeginDateSevice = dtBeginService.Value.ToShortDateString();
+            _Configure.EndDateSevice = dtEndService.Value.ToShortDateString();
+
             if (_Configure.PrintAttendanceList == null)
                 _Configure.PrintAttendanceList = new List<string>();
 
@@ -1637,6 +1658,48 @@ namespace HsinChuSemesterScoreFixed_JH
                     txtFailScoreMark.Text = _Configure.FailScoreMark;
                     txtReScoreMark.Text = _Configure.ReScoreMark;
                     txtNeeedReScoreMark.Text = _Configure.NeeedReScoreMark;
+
+                    // 開始與結束日期
+                    DateTime dtb, dte, dtee;
+                    if (DateTime.TryParse(_Configure.BeginDateAttend, out dtb))
+                        dtBeginAttend.Value = dtb;
+                    else
+                        dtBeginAttend.Value = DateTime.Now;
+
+                    if (DateTime.TryParse(_Configure.EndDateAttend, out dte))
+                        dtEndAttend.Value = dte;
+                    else
+                        dtEndAttend.Value = DateTime.Now;
+
+                    if (DateTime.TryParse(_Configure.BeginDateMerit, out dtb))
+                        dtBeginMerit.Value = dtb;
+                    else
+                        dtBeginMerit.Value = DateTime.Now;
+
+                    if (DateTime.TryParse(_Configure.EndDateMerit, out dte))
+                        dtEndMerit.Value = dte;
+                    else
+                        dtEndMerit.Value = DateTime.Now;
+
+                    if (DateTime.TryParse(_Configure.BeginDateDermit, out dtb))
+                        dtBeginDermit.Value = dtb;
+                    else
+                        dtBeginDermit.Value = DateTime.Now;
+
+                    if (DateTime.TryParse(_Configure.EndDateDermit, out dte))
+                        dtEndDermit.Value = dte;
+                    else
+                        dtEndDermit.Value = DateTime.Now;
+
+                    if (DateTime.TryParse(_Configure.BeginDateSevice, out dtb))
+                        dtBeginService.Value = dtb;
+                    else
+                        dtBeginService.Value = DateTime.Now;
+
+                    if (DateTime.TryParse(_Configure.EndDateSevice, out dte))
+                        dtEndService.Value = dte;
+                    else
+                        dtEndService.Value = DateTime.Now;
                 }
                 else
                 {

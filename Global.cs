@@ -20,7 +20,7 @@ namespace HsinChuSemesterScoreFixed_JH
         /// <summary>
         /// UDT TableName
         /// </summary>
-        public const string _UDTTableName = "ischool.HsinChuSemesterScoreFixed_JH.configure";
+        public const string _UDTTableName = "ischool.HsinChuSemesterScoreFixed_JH.configure__kcbs";
 
         public static string _ProjectName = "國中新竹學期成績單";
 
