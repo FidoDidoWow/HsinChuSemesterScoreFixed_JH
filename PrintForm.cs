@@ -84,6 +84,9 @@ namespace HsinChuSemesterScoreFixed_JH
         // 缺曠區間統計
         Dictionary<string, Dictionary<string, int>> _AttendanceDict = new Dictionary<string, Dictionary<string, int>>();
 
+        // 服務學習 與 學期歷程資料比對 有缺乏時 警告文字
+        List<string> serviceDataWarning = new List<string>();
+
         // 紀錄樣板設定
         List<DAO.UDT_ScoreConfig> _UDTConfigList;
 
@@ -146,6 +149,13 @@ namespace HsinChuSemesterScoreFixed_JH
             ePaperCloud.upload_ePaper(_SelSchoolYear, _SelSemester, reportName, "", memoryStream, ePaperCloud.ViewerType.Student, ePaperCloud.FormatType.Docx);
 
             FISCA.Presentation.MotherForm.SetStatusBarMessage("");
+
+            if (serviceDataWarning.Count > 0)
+            {
+                FISCA.Presentation.Controls.MsgBox.Show(string.Join("\r\n", serviceDataWarning.ToArray()), "警告!", MessageBoxButtons.OK, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1);
+            }
+
+            
         }
 
         private void _bgWorkReport_DoWork(object sender, DoWorkEventArgs e)
@@ -364,6 +374,14 @@ namespace HsinChuSemesterScoreFixed_JH
                 foreach (string str in Global.GetDisciplineNameList())
                     dt.Columns.Add(str + "區間統計");
 
+                // 區間 G7~ G9 上下學期 服務學習
+                dt.Columns.Add("G7_1_服務學習");
+                dt.Columns.Add("G7_2_服務學習");
+                dt.Columns.Add("G8_1_服務學習");
+                dt.Columns.Add("G8_2_服務學習");
+                dt.Columns.Add("G9_1_服務學習");
+                dt.Columns.Add("G9_2_服務學習");
+
                 //日常生活表現欄位
                 foreach (string key in Global.DLBehaviorRef.Keys)
                 {
@@ -541,6 +559,10 @@ namespace HsinChuSemesterScoreFixed_JH
 
                 //上課天數
                 Dictionary<string, SemesterHistoryItem> SemesterHistoryRecordDict = new Dictionary<string, SemesterHistoryItem>();
+
+                // 學期歷程ListSemesterHistoryRecordListDict(作為康橋分學期服務學習對照使用,<id,List<Record>>)
+                Dictionary<string, List<SemesterHistoryItem>> SemesterHistoryRecordListDict = new Dictionary<string, List<SemesterHistoryItem>>();
+
                 List<SemesterHistoryRecord> SemesterHistoryRecordList = K12.Data.SemesterHistory.SelectByStudentIDs(_StudentIDList);
                 if (SemesterHistoryRecordList != null)
                 {
@@ -553,12 +575,26 @@ namespace HsinChuSemesterScoreFixed_JH
                                 if (!SemesterHistoryRecordDict.ContainsKey(shr.RefStudentID))
                                     SemesterHistoryRecordDict.Add(shr.RefStudentID, shi);
                             }
+
+                            if (!SemesterHistoryRecordListDict.ContainsKey(shr.RefStudentID))
+                            {
+                                SemesterHistoryRecordListDict.Add(shr.RefStudentID, new List<SemesterHistoryItem>());
+                            }
+
+                            SemesterHistoryRecordListDict[shr.RefStudentID].Add(shi);
+
                         }
+
                     }
                 }
 
                 // 服務學習,傳入學年度學期
                 Dictionary<string, decimal> ServiceLearningDict = Utility.GetServiceLearningDetailBySemester(_StudentIDList, _SelSchoolYear, _SelSemester);
+
+                // 服務學習 依區間 分G7~G9 上下學期
+                Dictionary<string, Dictionary<string, decimal>> ServiceLearningDictBetween = Utility.GetServiceLearningDetailByDate(_StudentIDList, _BeginDateService, _EndDateService);
+
+                
 
                 // 缺曠資料區間統計
                 _AttendanceDict = Utility.GetAttendanceCountByDate(_Students, _BeginDateAttend, _EndDateAttend);
@@ -1171,6 +1207,59 @@ namespace HsinChuSemesterScoreFixed_JH
                                 row[key] = DisciplineCountDict[student.ID][str];
                         }
                     }
+
+                    // 將學年度_學期資料 轉成 G7_1 、G8_2 型態
+                    Dictionary<string, decimal> ServiceLearningDictBetweenG7G9 = new Dictionary<string,  decimal>();
+
+                    // 服務學習區間統計值(依照學期歷程分G7~~G9 上下學期)
+                    if (ServiceLearningDictBetween.ContainsKey(student.ID))
+                    {
+                        foreach (string key in ServiceLearningDictBetween[student.ID].Keys)
+                        {
+                            // 該服務學習 發生學年度 是否有學期歷程對照
+                            bool hasHiPair = false;
+
+                            if (SemesterHistoryRecordListDict.ContainsKey(student.ID))
+                            {
+                                foreach (SemesterHistoryItem hi in SemesterHistoryRecordListDict[student.ID])
+                                {
+                                    if (key == hi.SchoolYear + "_" + hi.Semester)
+                                    {
+                                        if (!ServiceLearningDictBetweenG7G9.ContainsKey("G" + hi.GradeYear + "_" + hi.Semester + "_服務學習"))
+                                        {
+                                            ServiceLearningDictBetweenG7G9.Add("G" + hi.GradeYear + "_" + hi.Semester + "_服務學習", 0);
+                                        }
+
+                                        // 會這樣子寫， 是因為 如果有休學生， 可能分別於 107_1、108_1 讀了兩個G7_1
+                                        ServiceLearningDictBetweenG7G9["G" + hi.GradeYear + "_" + hi.Semester + "_服務學習"] += ServiceLearningDictBetween[student.ID][key];
+
+                                        // 服務學習資料 有學期歷程對照 知道為 哪一年級
+                                        hasHiPair = true;
+                                    }
+                                }
+                            }
+
+
+                            // 沒有對照的話要列警告視窗
+                            if (!hasHiPair)
+                            {
+                                serviceDataWarning.Add("學生: " + student.Name + key + " 服務學習資料，無法找到對應學期歷程設定，請確認學期歷程設定資料設定完全。");
+                            }              
+
+                        }
+                    }
+
+
+                    // 上面 加總後的服務學習時數 最後套表列印
+                    foreach (string key in ServiceLearningDictBetweenG7G9.Keys)
+                    {
+                        if (dt.Columns.Contains(key))
+                        {
+                            row[key] = ServiceLearningDictBetweenG7G9[key];
+                        }
+                    }
+
+
 
                     // 加入康橋的ROW 內容
                     row = kmanager.NewKCBSROW(row);
