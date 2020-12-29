@@ -84,6 +84,26 @@ namespace HsinChuSemesterScoreFixed_JH
         // 紀錄樣板設定
         List<DAO.UDT_ScoreConfig> _UDTConfigList;
 
+        // 開始日期(缺曠)
+        private DateTime _BeginDateAttend;
+        // 結束日期(缺曠)
+        private DateTime _EndDateAttend;
+
+        // 開始日期(獎)
+        private DateTime _BeginDateMerit;
+        // 結束日期(獎)
+        private DateTime _EndDateMerit;
+
+        // 開始日期(康橋懲戒)
+        private DateTime _BeginDateDermit;
+        // 結束日期(康橋懲戒)
+        private DateTime _EndDateDermit;
+
+        // 開始日期(服務學習)
+        private DateTime _BeginDateService;
+        // 結束日期(康橋懲戒)
+        private DateTime _EndDateService;
+
         public PrintForm(List<string> StudIDList)
         {
             InitializeComponent();
@@ -168,6 +188,16 @@ namespace HsinChuSemesterScoreFixed_JH
                 dt.Columns.Add("校長");
                 dt.Columns.Add("服務學習時數");
                 dt.Columns.Add("文字描述");
+
+                dt.Columns.Add("缺曠區間開始日期");
+                dt.Columns.Add("缺曠區間結束日期");
+
+                dt.Columns.Add("獎勵區間開始日期");
+                dt.Columns.Add("獎勵區間結束日期");
+                dt.Columns.Add("康橋懲戒區間開始日期");
+                dt.Columns.Add("康橋懲戒區間結束日期");
+                dt.Columns.Add("服務學習區間開始日期");
+                dt.Columns.Add("服務學習區間結束日期");
 
 
                 dt.Columns.Add("學校地址");
@@ -583,6 +613,16 @@ namespace HsinChuSemesterScoreFixed_JH
 
                     row["學校地址"] = schoolAddress;
                     row["學校電話"] = schoolTelephone;
+
+                    row["缺曠區間開始日期"] = _BeginDateAttend.ToShortDateString();
+                    row["缺曠區間結束日期"] = _EndDateAttend.ToShortDateString();
+
+                    row["獎勵區間開始日期"] = _BeginDateMerit.ToShortDateString();
+                    row["獎勵區間結束日期"] = _EndDateMerit.ToShortDateString();
+                    row["康橋懲戒區間開始日期"] = _BeginDateDermit.ToShortDateString();
+                    row["康橋懲戒區間結束日期"] = _EndDateDermit.ToShortDateString();
+                    row["服務學習區間開始日期"] = _BeginDateService.ToShortDateString();
+                    row["服務學習區間結束日期"] = _EndDateService.ToShortDateString();
 
                     row["服務學習時數"] = "";
                     if (ServiceLearningDict.ContainsKey(student.ID))
@@ -1535,6 +1575,16 @@ namespace HsinChuSemesterScoreFixed_JH
                 FISCA.Presentation.Controls.MsgBox.Show("學期必填!");
                 return;
             }
+
+            _BeginDateAttend = dtBeginAttend.Value;
+            _EndDateAttend = dtEndAttend.Value;
+
+            _BeginDateMerit = dtBeginMerit.Value;
+            _EndDateMerit = dtEndMerit.Value;
+            _BeginDateDermit = dtBeginDermit.Value;
+            _EndDateDermit = dtEndDermit.Value;
+            _BeginDateService = dtBeginService.Value;
+            _EndDateService = dtEndService.Value;
 
 
             SaveTemplate(null, null);
