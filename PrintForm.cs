@@ -628,19 +628,37 @@ namespace HsinChuSemesterScoreFixed_JH
                 }
 
 
-                List<string> tempSubject = new List<string>();
-                foreach (ConfigItem it in confDomainSubject.GetSubjectItemList())
-                    tempSubject.Add(it.Name);
+                //List<string> tempSubject = new List<string>();
+                //foreach (ConfigItem it in confDomainSubject.GetSubjectItemList())
+                //    tempSubject.Add(it.Name);
 
-                // 依領域與科目排列
+                //// 依領域與科目排列
+                //List<string> sortKey = new List<string>();
+                //foreach (string dName in DomainNameList)
+                //{
+                //    foreach (string sName in tempSubject)
+                //    {
+                //        sortKey.Add(dName + "_" + sName);
+                //    }
+                //}
+
+                // 上面的排序舊方法 GetSubjectItemList 已找不出任何東西，
+                // 這邊應康橋需求，以 語文、數學、社會、自然科學、自然與生活科技、科技、藝術與人文、藝術、綜合活動、健康與體育、彈性課程 排序
+
+
+                // 依領域排列
                 List<string> sortKey = new List<string>();
-                foreach (string dName in DomainNameList)
-                {
-                    foreach (string sName in tempSubject)
-                    {
-                        sortKey.Add(dName + "_" + sName);
-                    }
-                }
+                sortKey.Add("語文");
+                sortKey.Add("數學");
+                sortKey.Add("社會");
+                sortKey.Add("自然科學");
+                sortKey.Add("自然與生活科技");
+                sortKey.Add("科技");
+                sortKey.Add("藝術與人文");
+                sortKey.Add("藝術");
+                sortKey.Add("綜合活動");
+                sortKey.Add("健康與體育");
+                sortKey.Add("彈性課程");
 
                 // 傳回康橋專有的表
                 dt = kmanager.NewKCBSTable(dt);
