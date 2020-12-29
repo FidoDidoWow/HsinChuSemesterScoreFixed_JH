@@ -349,7 +349,7 @@ namespace HsinChuSemesterScoreFixed_JH
                 }
 
 
-                // 區域缺曠欄位 (區間_一般_缺曠、區間_一般_事假...)
+                // 區間缺曠欄位 (區間_一般_缺曠、區間_一般_事假...)
                 foreach (var type in plist)
                 {
                     foreach (var absence in alist)
@@ -358,7 +358,9 @@ namespace HsinChuSemesterScoreFixed_JH
                     }
                 }
 
-
+                // 區間獎懲名稱
+                foreach (string str in Global.GetDisciplineNameList())
+                    dt.Columns.Add(str + "區間統計");
 
                 //日常生活表現欄位
                 foreach (string key in Global.DLBehaviorRef.Keys)
@@ -559,6 +561,8 @@ namespace HsinChuSemesterScoreFixed_JH
                 // 缺曠資料區間統計
                 _AttendanceDict = Utility.GetAttendanceCountByDate(_Students, _BeginDateAttend, _EndDateAttend);
 
+                // 獎懲資料 (對於康橋而言實質只有獎勵資料)
+                Dictionary<string, Dictionary<string, int>> DisciplineCountDict = Utility.GetDisciplineCountByDate(_StudentIDList, _BeginDateMerit, _EndDateMerit);
 
                 // 取得學期成績排名、五標、分數區間
                 //Dictionary<string, Dictionary<string, DataRow>> SemsScoreRankMatrixDataDict = Utility.GetSemsScoreRankMatrixData(_Configure.SchoolYear, _Configure.Semester, _StudentIDList);
@@ -1141,6 +1145,18 @@ namespace HsinChuSemesterScoreFixed_JH
                                     row[absentKey] = _AttendanceDict[student.ID][absentKey];
                             }
 
+                        }
+                    }
+
+
+                    // 獎懲區間統計值
+                    if (DisciplineCountDict.ContainsKey(student.ID))
+                    {
+                        foreach (string str in Global.GetDisciplineNameList())
+                        {
+                            string key = str + "區間統計";
+                            if (DisciplineCountDict[student.ID].ContainsKey(str))
+                                row[key] = DisciplineCountDict[student.ID][str];
                         }
                     }
 
