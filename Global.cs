@@ -161,6 +161,31 @@ namespace HsinChuSemesterScoreFixed_JH
 
                 builder.EndTable();
 
+                builder.Writeln();
+                builder.Writeln();
+
+                builder.Writeln("區間缺曠動態產生合併欄位");
+                builder.StartTable();
+
+                builder.InsertCell();
+                builder.Write("區間缺曠名稱與合併欄位");
+                builder.EndRow();
+
+                foreach (string pp in plist)
+                {
+                    foreach (string aa in alist)
+                    {
+
+                        string key = "區間_" + pp + "_" + aa;
+
+                        builder.InsertCell();
+                        builder.InsertField("MERGEFIELD " + key + " \\* MERGEFORMAT ", "«" + key + "»");
+                        builder.EndRow();
+                    }
+                }
+
+                builder.EndTable();
+
 
                 // 日常生活表現
                 builder.Writeln();

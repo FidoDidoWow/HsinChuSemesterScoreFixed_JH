@@ -362,6 +362,54 @@ namespace HsinChuSemesterScoreFixed_JH
         }
 
 
+        /// <summary>
+        /// 透過日期區間取得學生缺曠統計(傳入學生系統編號、開始日期、結束日期；回傳：學生系統編號、獎懲名稱,統計值
+        /// </summary>
+        /// <param name="StudIDList"></param>
+        /// <param name="beginDate"></param>
+        /// <param name="endDate"></param>
+        /// <returns></returns>
+        public static Dictionary<string, Dictionary<string, int>> GetAttendanceCountByDate(List<StudentRecord> StudRecordList, DateTime beginDate, DateTime endDate)
+        {
+            Dictionary<string, Dictionary<string, int>> retVal = new Dictionary<string, Dictionary<string, int>>();
+
+            List<PeriodMappingInfo> PeriodMappingList = PeriodMapping.SelectAll();
+            // 節次>類別
+            Dictionary<string, string> PeriodMappingDict = new Dictionary<string, string>();
+            foreach (PeriodMappingInfo rec in PeriodMappingList)
+            {
+                if (!PeriodMappingDict.ContainsKey(rec.Name))
+                    PeriodMappingDict.Add(rec.Name, rec.Type);
+            }
+
+            List<AttendanceRecord> attendList = K12.Data.Attendance.SelectByDate(StudRecordList, beginDate, endDate);
+
+            // 計算統計資料
+            foreach (AttendanceRecord rec in attendList)
+            {
+                if (!retVal.ContainsKey(rec.RefStudentID))
+                    retVal.Add(rec.RefStudentID, new Dictionary<string, int>());
+
+                foreach (AttendancePeriod per in rec.PeriodDetail)
+                {
+                    if (!PeriodMappingDict.ContainsKey(per.Period))
+                        continue;
+
+                    // ex.一般:曠課
+                    //string key = "區間" + PeriodMappingDict[per.Period] + "_" + per.AbsenceType;
+
+                    string key ="區間_" + PeriodMappingDict[per.Period] + "_" + per.AbsenceType;
+                    if (!retVal[rec.RefStudentID].ContainsKey(key))
+                        retVal[rec.RefStudentID].Add(key, 0);
+
+                    retVal[rec.RefStudentID][key]++;
+                }
+            }
+
+            return retVal;
+        }
+
+
 
     }
 }

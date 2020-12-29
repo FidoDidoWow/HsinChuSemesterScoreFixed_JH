@@ -81,6 +81,9 @@ namespace HsinChuSemesterScoreFixed_JH
 
         ScoreMappingConfig _ScoreMappingConfig = new ScoreMappingConfig();
 
+        // 缺曠區間統計
+        Dictionary<string, Dictionary<string, int>> _AttendanceDict = new Dictionary<string, Dictionary<string, int>>();
+
         // 紀錄樣板設定
         List<DAO.UDT_ScoreConfig> _UDTConfigList;
 
@@ -346,6 +349,16 @@ namespace HsinChuSemesterScoreFixed_JH
                 }
 
 
+                // 區域缺曠欄位 (區間_一般_缺曠、區間_一般_事假...)
+                foreach (var type in plist)
+                {
+                    foreach (var absence in alist)
+                    {
+                        dt.Columns.Add("區間_" + type + "_" + absence);
+                    }
+                }
+
+
 
                 //日常生活表現欄位
                 foreach (string key in Global.DLBehaviorRef.Keys)
@@ -542,6 +555,9 @@ namespace HsinChuSemesterScoreFixed_JH
 
                 // 服務學習,傳入學年度學期
                 Dictionary<string, decimal> ServiceLearningDict = Utility.GetServiceLearningDetailBySemester(_StudentIDList, _SelSchoolYear, _SelSemester);
+
+                // 缺曠資料區間統計
+                _AttendanceDict = Utility.GetAttendanceCountByDate(_Students, _BeginDateAttend, _EndDateAttend);
 
 
                 // 取得學期成績排名、五標、分數區間
@@ -1110,11 +1126,23 @@ namespace HsinChuSemesterScoreFixed_JH
                                 SetDLBehaviorData(key, Global.DLBehaviorRef[key], textScore, row);
                         }
 
-
                         row["文字描述"] = string.Join(Environment.NewLine, _文字描述);
 
                     }
 
+                    // 區間缺曠資料
+                    if (_AttendanceDict.ContainsKey(student.ID))
+                    {
+                        foreach (var absentKey in _AttendanceDict[student.ID].Keys)
+                        {
+                            if (_AttendanceDict[student.ID].ContainsKey(absentKey))
+                            {
+                                if (dt.Columns.Contains(absentKey))
+                                    row[absentKey] = _AttendanceDict[student.ID][absentKey];
+                            }
+
+                        }
+                    }
 
                     dt.Rows.Add(row);
 
