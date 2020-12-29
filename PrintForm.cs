@@ -218,6 +218,8 @@ namespace HsinChuSemesterScoreFixed_JH
                 dt.Columns.Add("收件人");
                 dt.Columns.Add("學期類別排名1");
                 dt.Columns.Add("學期類別排名2");
+                dt.Columns.Add("StudentID");
+                
 
                 //科目欄位
                 for (int i = 1; i <= Global.SupportSubjectCount; i++)
@@ -564,6 +566,12 @@ namespace HsinChuSemesterScoreFixed_JH
                 // 獎懲資料 (對於康橋而言實質只有獎勵資料)
                 Dictionary<string, Dictionary<string, int>> DisciplineCountDict = Utility.GetDisciplineCountByDate(_StudentIDList, _BeginDateMerit, _EndDateMerit);
 
+                // 專處理康橋客製報表多的東西
+                KCBSDermitManager kmanager = new KCBSDermitManager(_BeginDateDermit, _EndDateDermit);
+
+                // 取得康橋獎懲紀錄
+                kmanager.GetKCBSDermit(_StudentIDList);
+
                 // 取得學期成績排名、五標、分數區間
                 //Dictionary<string, Dictionary<string, DataRow>> SemsScoreRankMatrixDataDict = Utility.GetSemsScoreRankMatrixData(_Configure.SchoolYear, _Configure.Semester, _StudentIDList);
                 // 取得學期成績排名、五標、分數區間
@@ -598,6 +606,9 @@ namespace HsinChuSemesterScoreFixed_JH
                     }
                 }
 
+                // 傳回康橋專有的表
+                dt = kmanager.NewKCBSTable(dt);
+
                 //基本資料
                 foreach (StudentRecord student in _Students)
                 {
@@ -614,12 +625,13 @@ namespace HsinChuSemesterScoreFixed_JH
                     if (ParentRecordDict.ContainsKey(student.ID))
                         ParentRecord = ParentRecordDict[student.ID];
 
-
+                    
                     row["列印日期"] = printDateTime;
                     row["學校名稱"] = schoolName;
                     row["學年度"] = _SelSchoolYear;
                     row["學期"] = _SelSemester;
                     row["系統編號"] = "系統編號{" + student.ID + "}";
+                    row["StudentID"] = student.ID;
                     row["姓名"] = student.Name;
                     row["英文姓名"] = student.EnglishName;
                     row["班級"] = myClass.Name + "";
@@ -643,7 +655,7 @@ namespace HsinChuSemesterScoreFixed_JH
                     row["康橋懲戒區間結束日期"] = _EndDateDermit.ToShortDateString();
                     row["服務學習區間開始日期"] = _BeginDateService.ToShortDateString();
                     row["服務學習區間結束日期"] = _EndDateService.ToShortDateString();
-
+         
                     row["服務學習時數"] = "";
                     if (ServiceLearningDict.ContainsKey(student.ID))
                         row["服務學習時數"] = ServiceLearningDict[student.ID];
@@ -1159,6 +1171,9 @@ namespace HsinChuSemesterScoreFixed_JH
                                 row[key] = DisciplineCountDict[student.ID][str];
                         }
                     }
+
+                    // 加入康橋的ROW 內容
+                    row = kmanager.NewKCBSROW(row);
 
                     dt.Rows.Add(row);
 
