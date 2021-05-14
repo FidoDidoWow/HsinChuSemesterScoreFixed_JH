@@ -46,6 +46,12 @@ namespace HsinChuSemesterScoreFixed_JH.DAO
         [Field(Field = "IsDelete", Indexed = false)]
         public bool IsDelete { get; set; }
 
+        /// <summary>
+        /// 懲戒單號
+        /// </summary>
+        [Field(Field = "goldmedal_code", Indexed = false)]
+        public string Goldmedal_code { get; set; }
+
         // 取得最後更新時間(ischool UDT 內建)
         /// <summary>
         /// LastUpdate

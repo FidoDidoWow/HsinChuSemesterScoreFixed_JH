@@ -6,6 +6,7 @@ using System.IO;
 using System.Data;
 using FISCA.Permission;
 using FISCA.Presentation;
+using FISCA.UDT;
 
 namespace HsinChuSemesterScoreFixed_JH
 {
@@ -19,6 +20,14 @@ namespace HsinChuSemesterScoreFixed_JH
         [FISCA.MainMethod]
         public static void Main()
         {
+            // 先初始化
+            AccessHelper _AccessHelper = new AccessHelper();
+
+            List<DAO.UDT_KCBSDermit> retVal1 = _AccessHelper.Select<DAO.UDT_KCBSDermit>();
+            List<DAO.UDT_KCBSDermitComparison> retVal2 = _AccessHelper.Select<DAO.UDT_KCBSDermitComparison>();
+            List<DAO.UDT_finalTotalKCBSDermit> retVal3 = _AccessHelper.Select<DAO.UDT_finalTotalKCBSDermit>();
+
+
             RibbonBarItem rbItem1 = MotherForm.RibbonBarItems["學生", "資料統計"];
             rbItem1["報表"]["成績相關報表"]["成績通知單(康橋)"]["學期成績通知單(固定排名)(康橋懲戒)"].Enable = UserAcl.Current["9C776D1D-5C08-482A-95EB-91CBD965011C_KCBS"].Executable;
             rbItem1["報表"]["成績相關報表"]["成績通知單(康橋)"]["學期成績通知單(固定排名)(康橋懲戒)"].Click += delegate

@@ -26,8 +26,11 @@ namespace HsinChuSemesterScoreFixed_JH.DAO
         [Field(Field = "name", Indexed = false)]
         public string Name { get; set; }
 
-
-
+        /// <summary>
+        /// 懲戒單號
+        /// </summary>
+        [Field(Field = "goldmedal_code", Indexed = false)]
+        public string Goldmedal_code { get; set; }
 
 
 
