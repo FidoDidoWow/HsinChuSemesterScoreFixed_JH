@@ -10,4 +10,3 @@ C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\Hsin
 C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.csproj.CopyComplete
 C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.dll
 C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.pdb
-C:\Users\ED\Documents\ischool_Github\HsinChuSemesterScoreFixed_JH\obj\Debug\HsinChuSemesterScoreFixed_JH_KCBS.csprojAssemblyReference.cache
